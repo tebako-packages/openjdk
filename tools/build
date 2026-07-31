@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# tools/build — fetch + stage + image the openjdk toolkit payload
+# (aarch64-macos leg; one mechanical leg per triplet).
+#
+# Repack flow (no compilation): download the pinned Temurin JRE tarball,
+# sha256-verify, unpack, embed the payload manifest at
+# /__tpkg__/manifest.yaml (tier 1, blob digest zeroed per the fixed-point
+# rule), image with tfs-cli's in-process dwarfs-t writer, then fill the
+# sibling manifest with the real digest for the release tier.
+#
+# Inputs (env, all with sane defaults):
+#   TFS_CLI   tfs-cli binary, the in-process imager (default: tfs on PATH)
+#   WORK      build workspace (default: out/work-aarch64-macos)
+#   OUT       artifact dir   (default: out/aarch64-macos)
+#
+# Produces: $OUT/openjdk-<version>-aarch64-macos.tfs (+ payload-<platform>.yaml).
+set -euo pipefail
+
+FEEDSTOCK="$(cd "$(dirname "$0")/.." && pwd)"
+TRIPLET="aarch64-macos"
+
+TFS_CLI="${TFS_CLI:-tfs}"
+WORK="${WORK:-$FEEDSTOCK/out/work-$TRIPLET}"
+OUT="${OUT:-$FEEDSTOCK/out/$TRIPLET}"
+
+step() { printf '\n== %s\n' "$*"; }
+
+# The recipe pins upstream (url, sha256, version) — parse them without a
+# YAML dependency (the recipe's own three keys are single-line scalars).
+recipe_value() {
+  grep -E "^  $1:" "$FEEDSTOCK/recipe.yml" | head -1 | sed -E "s/^  $1: *\"?([^\"]*)\"?$/\1/"
+}
+VERSION="$(recipe_value version)"
+BUILD="$(recipe_value build)"
+URL="$(recipe_value url)"
+SHA256="$(recipe_value sha256)"
+[ -n "$VERSION" ] && [ -n "$BUILD" ] && [ -n "$URL" ] && [ -n "$SHA256" ] || {
+  echo "recipe.yml upstream url/sha256/version/build unreadable"; exit 1; }
+
+mkdir -p "$WORK" "$OUT"
+
+# ------------------------------------------------------------------ fetch
+step "fetch + sha256-verify Temurin JRE $VERSION"
+TARBALL="$WORK/temurin-jre.tar.gz"
+if [ ! -f "$TARBALL" ]; then
+  curl -sL --fail -o "$TARBALL" "$URL"
+fi
+echo "$SHA256  $TARBALL" | shasum -a 256 -c -
+
+# ------------------------------------------------------------------ stage
+step "stage the payload tree"
+ROOT="$WORK/root"
+rm -rf "$ROOT"
+mkdir -p "$ROOT"
+# macOS Temurin nests the JRE under <tag>/Contents/Home — that subtree is
+# the payload root (the Codesigning metadata is Apple-baggage).
+tar xzf "$TARBALL" -C "$ROOT" --strip-components=3
+# the JRE's own layout IS the payload layout (/bin/java, /lib, /release)
+[ -x "$ROOT/bin/java" ] || { echo "no bin/java in the staged tree"; exit 1; }
+
+# --------------------------------------------------------------- manifest
+step "embed /__tpkg__/manifest.yaml (blob digest zeroed, spec 03 §7)"
+mkdir -p "$ROOT/__tpkg__"
+sed -e "s|@@NAME@@|openjdk|g" \
+    -e "s|@@VERSION@@|$VERSION|g" \
+    -e "s|@@CREATED@@|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" \
+    -e "s|@@UPSTREAM_SHA256@@|$SHA256|g" \
+    -e "s|@@UPSTREAM_COMMIT@@|temurin-$VERSION+$BUILD|g" \
+    -e "s|@@BLOB_SHA256@@|0000000000000000000000000000000000000000000000000000000000000000|g" \
+    -e "s|platforms: \[.*\]|platforms: [$TRIPLET]|" \
+    "$FEEDSTOCK/manifests/payload.yaml" > "$ROOT/__tpkg__/manifest.yaml"
+
+# ------------------------------------------------------------------ image
+step "tfs mkimage (the in-process dwarfs-t writer)"
+IMG="$OUT/openjdk-$VERSION-$TRIPLET.tfs"
+rm -f "$IMG"
+"$TFS_CLI" mkimage --format dwarfs "$ROOT" --output "$IMG"
+sha=$(shasum -a 256 "$IMG" | cut -d' ' -f1)
+echo "image: $IMG"
+echo "sha256: $sha"
+
+# ------------------------------------------------------ sibling manifest
+step "fill the sibling manifest (release tier: real blob sha)"
+sed -e "s|@@BLOB_SHA256@@|$sha|g" \
+    "$ROOT/__tpkg__/manifest.yaml" > "$OUT/payload-$TRIPLET.yaml"
+echo "manifest: $OUT/payload-$TRIPLET.yaml"
+
+# -------------------------------------------------------------- smoke
+step "boot smoke (the imaged java answers -version)"
+TMPD="$(mktemp -d)"
+trap 'rm -rf "$TMPD"' EXIT
+"$TFS_CLI" extract "$IMG" -d "$TMPD" > /dev/null
+"$TMPD/bin/java" -version 2>&1 | head -2 || {
+  echo "::warning::java -version failed on the extracted tree (check the exec closure)"
+  exit 1
+}
+echo "boot smoke OK"
