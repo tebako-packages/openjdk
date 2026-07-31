@@ -34,6 +34,13 @@ jobs:
           repository: tamatebako/tebako
           path: tebako
 
+      - name: Checkout dwarfs-rs (path dep of the product workspace)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: tamatebako/dwarfs-rs
+          path: dwarfs-rs
+          submodules: recursive
+
       - name: Install toolchain (rustup)
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
@@ -76,6 +83,12 @@ jobs:
         with:
           repository: tamatebako/tebako
           path: tebako
+      - name: Checkout dwarfs-rs (path dep)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: tamatebako/dwarfs-rs
+          path: dwarfs-rs
+          submodules: recursive
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: payload-aarch64-macos
