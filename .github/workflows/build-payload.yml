@@ -41,6 +41,22 @@ jobs:
           path: dwarfs-rs
           submodules: recursive
 
+      - name: Restore the vcpkg baseline (dwarfs-t is the single writer)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Never fails the leg: a miss means the ports build normally.
+        run: |
+          bash dwarfs-rs/dwarfs-t/ci/vcpkg-baseline-restore.sh \
+            dwarfs-rs/dwarfs-t arm64-osx-static /Users/runner/vcpkg-inst \
+            || echo "baseline miss — ports build normally"
+          echo "DWARFS_RS_VCPKG_INSTALLED_DIR=/Users/runner/vcpkg-inst" >> "$GITHUB_ENV"
+
+      - name: Cache the cargo target dir
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+        with:
+          workspaces: |
+            tebako
+
       - name: Install toolchain (rustup)
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
@@ -89,6 +105,20 @@ jobs:
           repository: tamatebako/dwarfs-rs
           path: dwarfs-rs
           submodules: recursive
+      - name: Restore the vcpkg baseline (dwarfs-t is the single writer)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Never fails the leg: a miss means the ports build normally.
+        run: |
+          bash dwarfs-rs/dwarfs-t/ci/vcpkg-baseline-restore.sh \
+            dwarfs-rs/dwarfs-t arm64-osx-static /Users/runner/vcpkg-inst \
+            || echo "baseline miss — ports build normally"
+          echo "DWARFS_RS_VCPKG_INSTALLED_DIR=/Users/runner/vcpkg-inst" >> "$GITHUB_ENV"
+      - name: Cache the cargo target dir
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+        with:
+          workspaces: |
+            tebako
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: payload-aarch64-macos
