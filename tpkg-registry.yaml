@@ -1,5 +1,16 @@
 schema_version: 1
-# tebako-packages/openjdk — this feedstock's payload registry.
-# Consumed as tfs:github:tebako-packages/openjdk (default-branch form).
-# `tebako publish` upserts the payload's version entries here at release time.
-payloads: []
+payloads:
+- name: openjdk
+  kind: toolkit
+  versions:
+  - version: '21.0.12'
+    platforms:
+      aarch64-macos:
+        artifact: openjdk-21.0.12-macos-arm64.tfs
+        sha256: f19b7eea1634db6b2fa50cf7b3f2215d52c26d47805536d65eb915770a711d2c
+    release:
+      ref: tfs:github:tebako-packages/openjdk:21.0.12
+    entrypoints:
+    - java
+    - keytool
+  default: '21.0.12'
