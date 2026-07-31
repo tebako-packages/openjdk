@@ -6,7 +6,7 @@ identity:
   name: "openjdk"
   version: "21.0.12"
   producer: {tool: feedstock-build, tool_version: "1"}
-  created: "2026-07-31T09:31:23Z"
+  created: "2026-07-31T09:38:29Z"
   source: {src_sha256: "36bb71d6fa5184e12a6483e7662783c2cbd383f5dca8034140f0a84dd5aa797d", commit: "temurin-21.0.12+  build: "8"            # the Temurin build number (21.0.12+8)", builder: "local"}
   digest:
     tree_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"  # placeholder until the CAS lands (spec 03)

@@ -17,7 +17,8 @@
 set -euo pipefail
 
 FEEDSTOCK="$(cd "$(dirname "$0")/.." && pwd)"
-TRIPLET="aarch64-macos"
+TRIPLET="aarch64-macos"        # the manifest platforms form (vcpkg, spec 03)
+ASSET_PLATFORM="macos-arm64"    # the release-asset name form (spec 03 §3)
 
 TFS_CLI="${TFS_CLI:-tfs}"
 WORK="${WORK:-$FEEDSTOCK/out/work-$TRIPLET}"
@@ -72,7 +73,7 @@ sed -e "s|@@NAME@@|openjdk|g" \
 
 # ------------------------------------------------------------------ image
 step "tfs mkimage (the in-process dwarfs-t writer)"
-IMG="$OUT/openjdk-$VERSION-$TRIPLET.tfs"
+IMG="$OUT/openjdk-$VERSION-$ASSET_PLATFORM.tfs"
 rm -f "$IMG"
 "$TFS_CLI" mkimage --format dwarfs "$ROOT" --output "$IMG"
 sha=$(shasum -a 256 "$IMG" | cut -d' ' -f1)
