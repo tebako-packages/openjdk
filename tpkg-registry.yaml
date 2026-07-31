@@ -1,0 +1,5 @@
+schema_version: 1
+# tebako-packages/openjdk — this feedstock's payload registry.
+# Consumed as tfs:github:tebako-packages/openjdk (default-branch form).
+# `tebako publish` upserts the payload's version entries here at release time.
+payloads: []

@@ -1,0 +1,24 @@
+schema_version: 1
+# Payload manifest template for openjdk (spec 03; filled from recipe.yml by tools/stage)
+identity:
+  schema_version: 1
+  kind: toolkit
+  name: "openjdk"
+  version: "@@VERSION@@"
+  producer: {tool: feedstock-build, tool_version: "1"}
+  created: "@@CREATED@@"
+  source: {src_sha256: "@@UPSTREAM_SHA256@@", commit: "@@UPSTREAM_COMMIT@@", builder: "local"}
+  digest:
+    tree_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"  # placeholder until the CAS lands (spec 03)
+    blob_sha256: "@@BLOB_SHA256@@"   # zeroed inside the image (spec 03 §7)
+  signing: {state: unsigned}
+  encryption: {state: none}
+  annotations: {}
+provides:
+  executables:
+    - {name: "java", path: "/bin/java", version: "@@VERSION@@"}
+    - {name: "keytool", path: "/bin/keytool", version: "@@VERSION@@"}
+  libraries: []
+  platforms: [aarch64-macos]
+  capabilities: {exec: true, read: true}
+requires: []

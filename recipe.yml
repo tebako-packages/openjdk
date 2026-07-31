@@ -1,0 +1,22 @@
+# Feedstock recipe for openjdk
+# spec 13 §9 + docs/conventions.md in tebako-packages/index
+name: "openjdk"
+kind: toolkit
+summary: "OpenJDK (Temurin JRE) — the hermetic java for metanorma's jing/mn2pdf chain"
+
+upstream:
+  # Eclipse Temurin JRE 21.0.12+8 (Adoptium), aarch64 macOS
+  url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B7/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12_7.tar.gz"
+  sha256: "36bb71d6fa5184e12a6483e7662783c2cbd383f5dca8034140f0a84dd5aa797d"
+  version: "21.0.12"
+
+build:
+  system: repack          # no compilation: unpack, prune, image
+  deps: []
+
+image:
+  format: dwarfs
+  # .tfs everywhere (the tebako fs image — DwarFS-T format; normal dwarfs
+  # readers cannot read it)
+  extension:
+    default: tfs
