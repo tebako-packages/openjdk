@@ -5,11 +5,21 @@ kind: toolkit
 summary: "OpenJDK (Temurin JRE) — the hermetic java for metanorma's jing/mn2pdf chain"
 
 upstream:
-  # Eclipse Temurin JRE 21.0.12+8 (Adoptium), aarch64 macOS
-  url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12_8.tar.gz"
-  sha256: "36bb71d6fa5184e12a6483e7662783c2cbd383f5dca8034140f0a84dd5aa797d"
+  # Eclipse Temurin JRE 21.0.12+8 (Adoptium) — one binary source per
+  # platform (repack: no compilation). platform is the spec 03 triplet;
+  # strip_components is the nesting depth of the payload root inside the
+  # archive (macOS nests under <tag>/Contents/Home, windows under one dir).
   version: "21.0.12"
   build: "8"            # the Temurin build number (21.0.12+8)
+  sources:
+    - platform: "aarch64-macos"
+      url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12_8.tar.gz"
+      sha256: "36bb71d6fa5184e12a6483e7662783c2cbd383f5dca8034140f0a84dd5aa797d"
+      strip_components: 3
+    - platform: "x86_64-windows-ucrt"
+      url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_x64_windows_hotspot_21.0.12_8.zip"
+      sha256: "b8aa18fef5edb69bee8618f99677d66d0873d22cb40d974c15ac9ffcdecf73ba"
+      strip_components: 1
 
 build:
   system: repack          # no compilation: unpack, prune, image

@@ -1,6 +1,7 @@
 name: build-payload
 # openjdk feedstock: fetch → stage → image → smoke → (on tags) publish.
-# One leg per (version × platform) in the recipe — aarch64-macos today.
+# One mechanical leg per (version × platform) in the recipe's sources —
+# aarch64-macos + x86_64-windows-ucrt today.
 on:
   push:
     branches: [main]
@@ -17,11 +18,27 @@ permissions:
 
 jobs:
   build:
-    name: aarch64-macos
-    runs-on: macos-14
-    env:
-      TFS_CLI: ${{ github.workspace }}/tebako/target/release/tfs
-      TEBAKO_CLI: ${{ github.workspace }}/tebako/target/release/tebako
+    name: ${{ matrix.platform.triplet }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - triplet: aarch64-macos
+            asset_platform: macos-arm64
+            os: macos-14
+            vcpkg_triplet: arm64-osx-static
+            target_dir: target/release
+            exe_suffix: ""
+            tar: tar
+          - triplet: x86_64-windows-ucrt
+            asset_platform: windows-ucrt64
+            os: windows-latest
+            vcpkg_triplet: x64-mingw-static
+            target_dir: target/x86_64-pc-windows-gnu/release
+            exe_suffix: .exe
+            # bsdtar (ucrt64 libarchive) reads the windows zip; GNU tar cannot.
+            tar: /d/a/_temp/msys64/ucrt64/bin/bsdtar.exe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -42,6 +59,7 @@ jobs:
           submodules: recursive
 
       - name: Restore the vcpkg baseline (dwarfs-t is the single writer)
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # Never fails the leg: a miss means the ports build normally.
@@ -49,8 +67,20 @@ jobs:
         # DWARFS_RS_VCPKG_INSTALLED_DIR into GITHUB_ENV.
         run: |
           bash dwarfs-rs/dwarfs-t/ci/vcpkg-baseline-restore.sh \
-            dwarfs-rs/dwarfs-t arm64-osx-static \
+            dwarfs-rs/dwarfs-t ${{ matrix.platform.vcpkg_triplet }} \
             || echo "baseline miss — ports build normally"
+
+      # The windows CLI build uses the proven ucrt64 shape (tebako-rs's
+      # ci/windows-gnu-cli.sh): one toolchain, a closed PATH, the make
+      # toolshim + BOTAN_CONFIGURE_CC + BINDGEN_EXTRA_CLANG_ARGS for the
+      # vendored rnp/Botan, and the trailing -lmsvcrt RUSTFLAGS.
+      - name: Set up MSys2 (ucrt64 toolchain + cmake/ninja + bsdtar)
+        if: matrix.platform.triplet == 'x86_64-windows-ucrt'
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: ucrt64
+          path-type: minimal
+          install: mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-libarchive
 
       - name: Cache the cargo target dir
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -67,7 +97,8 @@ jobs:
           vcpkgGitCommitId: f14401ca0f2754347c3864da7488a9b955b4e47a
           vcpkgDirectory: ${{ github.workspace }}/.vcpkg-root
 
-      - name: Build the tfs + tebako CLIs
+      - name: Build the tfs + tebako CLIs (POSIX legs)
+        if: matrix.platform.triplet != 'x86_64-windows-ucrt'
         env:
           DWARFS_RS_VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
           VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
@@ -75,14 +106,45 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: cargo build --release --manifest-path tebako/Cargo.toml -p tfs-cli -p tebako-cli
 
+      - name: Build the tfs + tebako CLIs (windows-gnu)
+        if: matrix.platform.triplet == 'x86_64-windows-ucrt'
+        shell: bash
+        env:
+          DWARFS_RS_VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
+          VCPKG_ROOT: ${{ github.workspace }}/.vcpkg-root
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          set -euo pipefail
+          export PATH="/d/a/_temp/msys64/ucrt64/bin:/c/Program Files/Git/usr/bin:/c/Program Files/Git/cmd:/c/Users/runneradmin/.cargo/bin:/c/Windows/System32"
+          TOOLSHIM=/d/a/_temp/tebako-toolshim
+          mkdir -p "$TOOLSHIM"
+          cp "/d/a/_temp/msys64/ucrt64/bin/mingw32-make.exe" "$TOOLSHIM/make.exe"
+          export PATH="$TOOLSHIM:$PATH"
+          export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=gcc.exe
+          export RUSTFLAGS="-C link-arg=-static-libgcc -C link-arg=-static-libstdc++ -C link-arg=-lmsvcrt"
+          export BOTAN_CONFIGURE_CC=gcc
+          UCRT64=/d/a/_temp/msys64/ucrt64
+          GCC_INCLUDE=$(echo "$UCRT64"/lib/gcc/x86_64-w64-mingw32/*/include)
+          [ -d "$GCC_INCLUDE" ] || { echo "ucrt64 gcc include dir missing"; exit 1; }
+          export BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-w64-mingw32 -isystem $UCRT64/include -isystem $GCC_INCLUDE"
+          cargo build --release --manifest-path tebako/Cargo.toml \
+            --target x86_64-pc-windows-gnu -p tfs-cli -p tebako-cli
+
       - name: Build the payload
+        shell: bash
+        env:
+          TRIPLET: ${{ matrix.platform.triplet }}
+          ASSET_PLATFORM: ${{ matrix.platform.asset_platform }}
+          EXE_SUFFIX: ${{ matrix.platform.exe_suffix }}
+          TAR: ${{ matrix.platform.tar }}
+          TFS_CLI: tebako/${{ matrix.platform.target_dir }}/tfs${{ matrix.platform.exe_suffix }}
         run: tools/build
 
       - name: Upload payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: payload-aarch64-macos
-          path: out/aarch64-macos/
+          name: payload-${{ matrix.platform.triplet }}
+          path: out/${{ matrix.platform.triplet }}/
           retention-days: 7
 
   release:
@@ -121,10 +183,22 @@ jobs:
         with:
           workspaces: |
             tebako
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - name: Collect payloads (all legs)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: payload-aarch64-macos
-          path: out/aarch64-macos
+          pattern: payload-*
+          path: out/
+          merge-multiple: false
+      - name: Restore layout
+        shell: bash
+        run: |
+          set -e
+          for d in out/payload-*/; do
+            p="${d#out/payload-}"; p="${p%/}"
+            mkdir -p "out/$p"
+            mv "$d"* "out/$p/"
+            rmdir "$d"
+          done
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
       - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
@@ -138,12 +212,13 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: cargo build --release --manifest-path tebako/Cargo.toml -p tebako-cli
       - name: Publish (release + registry + clean-cache verify)
+        shell: bash
         run: |
           set -euo pipefail
-          asset="out/aarch64-macos/openjdk-${{ github.ref_name }}-macos-arm64.tfs"
           "$TEBAKO_CLI" publish --name openjdk \
             --release "tfs:github:tebako-packages/openjdk:${{ github.ref_name }}" \
-            --payload "aarch64-macos=$asset" \
+            --payload "aarch64-macos=out/aarch64-macos/openjdk-${{ github.ref_name }}-macos-arm64.tfs" \
+            --payload "x86_64-windows-ucrt=out/x86_64-windows-ucrt/openjdk-${{ github.ref_name }}-windows-ucrt64.tfs" \
             --registry-out tpkg-registry.yaml
       - name: Commit the registry
         run: |
@@ -151,5 +226,5 @@ jobs:
           git config user.name "tebako-packages[bot]"
           git config user.email "bot@tebako.org"
           git add tpkg-registry.yaml
-          git commit -m "publish ${{ github.ref_name }}: registry entry (macos-arm64)" || echo "registry unchanged"
+          git commit -m "publish ${{ github.ref_name }}: registry entry (macos-arm64, windows-ucrt64)" || echo "registry unchanged"
           git push

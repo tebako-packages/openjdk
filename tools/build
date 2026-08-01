@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
 # tools/build — fetch + stage + image the openjdk toolkit payload
-# (aarch64-macos leg; one mechanical leg per triplet).
+# (one mechanical leg per triplet, per docs/conventions.md).
 #
-# Repack flow (no compilation): download the pinned Temurin JRE tarball,
-# sha256-verify, unpack, embed the payload manifest at
+# Repack flow (no compilation): download the pinned Temurin JRE archive
+# for THIS leg's platform, sha256-verify, unpack to the payload root
+# (strip_components from the recipe), embed the payload manifest at
 # /__tpkg__/manifest.yaml (tier 1, blob digest zeroed per the fixed-point
 # rule), image with tfs-cli's in-process dwarfs-t writer, then fill the
 # sibling manifest with the real digest for the release tier.
 #
-# Inputs (env, all with sane defaults):
-#   TFS_CLI   tfs-cli binary, the in-process imager (default: tfs on PATH)
-#   WORK      build workspace (default: out/work-aarch64-macos)
-#   OUT       artifact dir   (default: out/aarch64-macos)
+# Inputs (env; the workflow's matrix exports the per-leg values):
+#   TRIPLET        spec 03 triplet        (default: aarch64-macos)
+#   ASSET_PLATFORM release-asset name form (default: macos-arm64)
+#   EXE_SUFFIX     payload exe suffix     (default: empty; .exe on windows)
+#   TAR            archiver               (default: tar; the windows leg
+#                                          points at the ucrt64 bsdtar —
+#                                          GNU tar cannot read the zip)
+#   TFS_CLI        tfs-cli binary, the in-process imager (default: tfs)
+#   WORK           build workspace (default: out/work-$TRIPLET)
+#   OUT            artifact dir   (default: out/$TRIPLET)
 #
-# Produces: $OUT/openjdk-<version>-aarch64-macos.tfs (+ payload-<platform>.yaml).
+# Produces: $OUT/openjdk-<version>-$ASSET_PLATFORM.tfs (+ payload-$TRIPLET.yaml).
 set -euo pipefail
 
 FEEDSTOCK="$(cd "$(dirname "$0")/.." && pwd)"
-TRIPLET="aarch64-macos"        # the manifest platforms form (vcpkg, spec 03)
-ASSET_PLATFORM="macos-arm64"    # the release-asset name form (spec 03 §3)
+TRIPLET="${TRIPLET:-aarch64-macos}"
+ASSET_PLATFORM="${ASSET_PLATFORM:-macos-arm64}"
+EXE_SUFFIX="${EXE_SUFFIX:-}"
+TAR="${TAR:-tar}"
 
 TFS_CLI="${TFS_CLI:-tfs}"
 WORK="${WORK:-$FEEDSTOCK/out/work-$TRIPLET}"
@@ -26,38 +35,63 @@ OUT="${OUT:-$FEEDSTOCK/out/$TRIPLET}"
 
 step() { printf '\n== %s\n' "$*"; }
 
-# The recipe pins upstream (url, sha256, version) — parse them without a
-# YAML dependency (the recipe's own three keys are single-line scalars).
+# sha256sum exists on Git-bash + linux; macOS has only shasum.
+sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
+sha256_check() { echo "$1  $2" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }; }
+
+# The recipe pins version/build as top-level scalars and the per-platform
+# sources as an array (url/sha256/strip_components per platform entry) —
+# parse both without a YAML dependency (the recipe's shape is the
+# feedstock's own convention, indentation-anchored).
 recipe_value() {
   grep -E "^  $1:" "$FEEDSTOCK/recipe.yml" | head -1 | sed -E "s/^  $1: *\"?([^\"]*)\"?$/\1/"
 }
+recipe_source_value() {
+  awk -v platform="$TRIPLET" -v key="$1" '
+    /^    - platform:/ { active = ($0 ~ "\"" platform "\"") }
+    active && $0 ~ "^      " key ":" {
+      sub("^      " key ": *\"?", "")
+      sub("\"$", "")
+      print
+      exit
+    }
+  ' "$FEEDSTOCK/recipe.yml"
+}
+
 VERSION="$(recipe_value version)"
 BUILD="$(recipe_value build)"
-URL="$(recipe_value url)"
-SHA256="$(recipe_value sha256)"
-[ -n "$VERSION" ] && [ -n "$BUILD" ] && [ -n "$URL" ] && [ -n "$SHA256" ] || {
-  echo "recipe.yml upstream url/sha256/version/build unreadable"; exit 1; }
+URL="$(recipe_source_value url)"
+SHA256="$(recipe_source_value sha256)"
+STRIP="$(recipe_source_value strip_components)"
+[ -n "$VERSION" ] && [ -n "$BUILD" ] && [ -n "$URL" ] && [ -n "$SHA256" ] && [ -n "$STRIP" ] || {
+  echo "recipe.yml upstream version/build or a sources entry for $TRIPLET unreadable"; exit 1; }
+
+case "$URL" in
+  *.zip)     EXT=".zip" ;;
+  *.tar.gz)  EXT=".tar.gz" ;;
+  *) echo "unsupported upstream archive extension in $URL"; exit 1 ;;
+esac
 
 mkdir -p "$WORK" "$OUT"
 
 # ------------------------------------------------------------------ fetch
-step "fetch + sha256-verify Temurin JRE $VERSION"
-TARBALL="$WORK/temurin-jre.tar.gz"
-if [ ! -f "$TARBALL" ]; then
-  curl -sL --fail -o "$TARBALL" "$URL"
+step "fetch + sha256-verify Temurin JRE $VERSION ($TRIPLET)"
+ARCHIVE="$WORK/temurin-jre$EXT"
+if [ ! -f "$ARCHIVE" ]; then
+  curl -sL --fail -o "$ARCHIVE" "$URL"
 fi
-echo "$SHA256  $TARBALL" | shasum -a 256 -c -
+sha256_check "$SHA256" "$ARCHIVE"
 
 # ------------------------------------------------------------------ stage
-step "stage the payload tree"
+step "stage the payload tree (strip $STRIP)"
 ROOT="$WORK/root"
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
-# macOS Temurin nests the JRE under <tag>/Contents/Home — that subtree is
-# the payload root (the Codesigning metadata is Apple-baggage).
-tar xzf "$TARBALL" -C "$ROOT" --strip-components=3
-# the JRE's own layout IS the payload layout (/bin/java, /lib, /release)
-[ -x "$ROOT/bin/java" ] || { echo "no bin/java in the staged tree"; exit 1; }
+# The archive's nesting depth is recipe data (strip_components): macOS
+# nests the JRE under <tag>/Contents/Home, windows under one directory.
+# The JRE's own layout IS the payload layout (/bin/java, /lib, /release).
+"$TAR" -xf "$ARCHIVE" -C "$ROOT" --strip-components="$STRIP"
+[ -x "$ROOT/bin/java$EXE_SUFFIX" ] || { echo "no bin/java$EXE_SUFFIX in the staged tree"; exit 1; }
 
 # --------------------------------------------------------------- manifest
 step "embed /__tpkg__/manifest.yaml (blob digest zeroed, spec 03 §7)"
@@ -76,7 +110,7 @@ step "tfs mkimage (the in-process dwarfs-t writer)"
 IMG="$OUT/openjdk-$VERSION-$ASSET_PLATFORM.tfs"
 rm -f "$IMG"
 "$TFS_CLI" mkimage --format dwarfs "$ROOT" --output "$IMG"
-sha=$(shasum -a 256 "$IMG" | cut -d' ' -f1)
+sha=$(sha256_of "$IMG")
 echo "image: $IMG"
 echo "sha256: $sha"
 
@@ -91,7 +125,7 @@ step "boot smoke (the imaged java answers -version)"
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
 "$TFS_CLI" extract "$IMG" -d "$TMPD" > /dev/null
-"$TMPD/bin/java" -version 2>&1 | head -2 || {
+"$TMPD/bin/java$EXE_SUFFIX" -version 2>&1 | head -2 || {
   echo "::warning::java -version failed on the extracted tree (check the exec closure)"
   exit 1
 }
