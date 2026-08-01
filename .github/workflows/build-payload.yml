@@ -126,7 +126,9 @@ jobs:
           UCRT64=/d/a/_temp/msys64/ucrt64
           GCC_INCLUDE=$(echo "$UCRT64"/lib/gcc/x86_64-w64-mingw32/*/include)
           [ -d "$GCC_INCLUDE" ] || { echo "ucrt64 gcc include dir missing"; exit 1; }
-          export BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-w64-mingw32 -isystem $UCRT64/include -isystem $GCC_INCLUDE"
+          # WINDOWS-FORM paths (D:/...) — the runner's libclang is a native
+          # Windows binary; the msys form (/d/a/...) does not resolve.
+          export BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-w64-mingw32 -isystem $(cygpath -m "$UCRT64/include") -isystem $(cygpath -m "$GCC_INCLUDE")"
           cargo build --release --manifest-path tebako/Cargo.toml \
             --target x86_64-pc-windows-gnu -p tfs-cli -p tebako-cli
 
