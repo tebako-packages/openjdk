@@ -135,12 +135,14 @@ jobs:
           # to START (DLL class) exits 127 with no stderr — enumerate the
           # imports up front and smoke the CLI here, where the build env
           # is still live, instead of debugging the payload step blind.
+          # (Bare invocation prints the help and exits 0 — tfs has no
+          # --version flag.)
           for exe in tebako/target/x86_64-pc-windows-gnu/release/tfs.exe \
                      tebako/target/x86_64-pc-windows-gnu/release/tebako.exe; do
             echo "=== imports: $exe ==="
             objdump -p "$exe" | grep -E "DLL Name" | sort -u || true
           done
-          tebako/target/x86_64-pc-windows-gnu/release/tfs.exe --version
+          tebako/target/x86_64-pc-windows-gnu/release/tfs.exe
 
       - name: Build the payload
         shell: bash
