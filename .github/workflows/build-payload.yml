@@ -131,6 +131,16 @@ jobs:
           export BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-w64-mingw32 -isystem $(cygpath -m "$UCRT64/include") -isystem $(cygpath -m "$GCC_INCLUDE")"
           cargo build --release --manifest-path tebako/Cargo.toml \
             --target x86_64-pc-windows-gnu -p tfs-cli -p tebako-cli
+          # Forensics before the payload step: a windows binary that fails
+          # to START (DLL class) exits 127 with no stderr — enumerate the
+          # imports up front and smoke the CLI here, where the build env
+          # is still live, instead of debugging the payload step blind.
+          for exe in tebako/target/x86_64-pc-windows-gnu/release/tfs.exe \
+                     tebako/target/x86_64-pc-windows-gnu/release/tebako.exe; do
+            echo "=== imports: $exe ==="
+            objdump -p "$exe" | grep -E "DLL Name" | sort -u || true
+          done
+          tebako/target/x86_64-pc-windows-gnu/release/tfs.exe --version
 
       - name: Build the payload
         shell: bash
