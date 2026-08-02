@@ -167,7 +167,16 @@ jobs:
           EXE_SUFFIX: ${{ matrix.platform.exe_suffix }}
           TAR: ${{ matrix.platform.tar }}
           TFS_CLI: tebako/${{ matrix.platform.target_dir }}/tfs${{ matrix.platform.exe_suffix }}
-        run: tools/build
+        # The windows leg runs the SAME closed PATH as the CLI build: the
+        # runner's default PATH carries several stray mingw installs, and a
+        # runtime LoadLibrary resolving one of those first is the silent
+        # exit-127 class (probe-proven: mkimage exits 0 on the closed PATH
+        # in this very job, run 30731679952).
+        run: |
+          if [ "${{ matrix.platform.triplet }}" = "x86_64-windows-ucrt" ]; then
+            export PATH="/d/a/_temp/msys64/ucrt64/bin:/c/Program Files/Git/usr/bin:/c/Program Files/Git/cmd:/c/Users/runneradmin/.cargo/bin:/c/Windows/System32"
+          fi
+          tools/build
 
       - name: Upload payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
