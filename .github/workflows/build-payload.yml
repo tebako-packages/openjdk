@@ -143,6 +143,21 @@ jobs:
             objdump -p "$exe" | grep -E "DLL Name" | sort -u || true
           done
           tebako/target/x86_64-pc-windows-gnu/release/tfs.exe
+          # The mkimage subcommand is the release-build failure surface
+          # (exit 127 at `tfs mkimage` in the payload step, run 30730024429,
+          # while the bare invocation works). Run it HERE (same env as the
+          # build) with the NT status in hex and the CRT-private import
+          # table — an entry point the release optimizer emits but the
+          # runner's UCRT lacks is the prime suspect (debug builds pass).
+          TFS=tebako/target/x86_64-pc-windows-gnu/release/tfs.exe
+          echo "=== crt-private imports: tfs.exe ==="
+          objdump -p "$TFS" | sed -n '/api-ms-win-crt-private/,/^\s*$/p' | head -40 || true
+          mkdir -p /d/a/_temp/mkimage-probe/root/__tpkg__
+          echo "name: probe" > /d/a/_temp/mkimage-probe/root/__tpkg__/manifest.yaml
+          "$TFS" mkimage --format dwarfs /d/a/_temp/mkimage-probe/root --output /d/a/_temp/mkimage-probe/probe.tfs
+          rc=$?
+          printf 'mkimage probe exit: %d (0x%x)\n' "$rc" "$rc"
+          exit "$rc"
 
       - name: Build the payload
         shell: bash
