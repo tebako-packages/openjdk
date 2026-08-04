@@ -13,12 +13,15 @@ identity:
     blob_sha256: "@@BLOB_SHA256@@"   # zeroed inside the image (spec 03 §7)
   signing: {state: unsigned}
   encryption: {state: none}
-  annotations: {}
+  # The payload root IS a JAVA_HOME (the JRE's own layout: bin/java[.exe],
+  # lib/, release). Mounted at the consumer-declared point M (spec 03 §2.3
+  # mount rule): JAVA_HOME=M, java at M/bin/java[.exe].
+  annotations: {java_home: "/"}
 provides:
   executables:
-    - {name: "java", path: "/bin/java", version: "@@VERSION@@"}
-    - {name: "keytool", path: "/bin/keytool", version: "@@VERSION@@"}
+    - {name: "java", path: "/bin/java@@EXE_SUFFIX@@", version: "@@VERSION@@"}
+    - {name: "keytool", path: "/bin/keytool@@EXE_SUFFIX@@", version: "@@VERSION@@"}
   libraries: []
-  platforms: [aarch64-macos]
+  platforms: [aarch64-macos, x86_64-windows-ucrt]
   capabilities: {exec: true, read: true}
 requires: []
