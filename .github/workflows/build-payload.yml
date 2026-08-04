@@ -45,13 +45,16 @@ jobs:
 
       # bsdtar is the only msys2 need: the recipe's windows source is a
       # zip and GNU tar cannot read it (the macOS leg uses system tar).
-      - name: Set up MSys2 (ucrt64 bsdtar)
+      # gcc-libs is explicit: the v0.1.1 windows tfs binary imports the
+      # ucrt64 gcc-runtime DLLs (libstdc++-6, libwinpthread-1) and both
+      # the fetch-step smoke and the payload step resolve them from here.
+      - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime)
         if: matrix.platform.triplet == 'x86_64-windows-ucrt'
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: ucrt64
           path-type: minimal
-          install: mingw-w64-ucrt-x86_64-libarchive
+          install: mingw-w64-ucrt-x86_64-libarchive mingw-w64-ucrt-x86_64-gcc-libs
 
       # The imager (tfs mkimage/extract) is the product repo's own
       # published binary — releases are the interface; the feedstock
@@ -61,6 +64,7 @@ jobs:
       - name: Fetch the imager (tebako release v0.1.1, sha256-pinned)
         shell: bash
         env:
+          TRIPLET: ${{ matrix.platform.triplet }}
           TFS_ASSET: ${{ matrix.platform.tfs_asset }}
           TFS_SHA256: ${{ matrix.platform.tfs_sha256 }}
           TFS_BIN: .packager/tfs${{ matrix.platform.exe_suffix }}
@@ -71,6 +75,14 @@ jobs:
             "https://github.com/tamatebako/tebako/releases/download/v0.1.1/$TFS_ASSET"
           echo "$TFS_SHA256  $TFS_BIN" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
           chmod +x "$TFS_BIN"
+          # The v0.1.1 windows binary dynamically imports the ucrt64
+          # gcc-runtime DLLs (libstdc++-6, libwinpthread-1) — off the
+          # default PATH the loader kills it with a silent exit 127.
+          # Resolve them from the msys2 install (the payload step's
+          # closed PATH does the same for mkimage/extract).
+          if [ "$TRIPLET" = "x86_64-windows-ucrt" ]; then
+            export PATH="/d/a/_temp/msys64/ucrt64/bin:$PATH"
+          fi
           # Bare invocation prints the help and exits 0 (tfs has no
           # --version flag): the dead-binary smoke, here where the
           # download just happened, not inside the payload step.
