@@ -7,7 +7,10 @@ payloads:
     platforms:
       aarch64-macos:
         artifact: openjdk-21.0.12-macos-arm64.tfs
-        sha256: f19b7eea1634db6b2fa50cf7b3f2215d52c26d47805536d65eb915770a711d2c
+        sha256: '86b75b5bde534618f83063b1ef7469f660678391ba19750845ac9a4725674aa1'
+      x86_64-windows-ucrt:
+        artifact: openjdk-21.0.12-windows-ucrt64.tfs
+        sha256: '778eb1b2398c755b18ea03375ebc0f6cc0d819415a2bb9aec872ac1d673fe861'
     release:
       ref: tfs:github:tebako-packages/openjdk:21.0.12
     entrypoints:
