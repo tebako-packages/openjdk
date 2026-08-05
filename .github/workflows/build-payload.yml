@@ -141,6 +141,8 @@ jobs:
           done
       # The publisher is the product repo's published CLI (same release
       # line as the imager), sha256-pinned — never a from-source build.
+      # tebako publish also needs the dispatcher (it refuses to register
+      # shims pointing at nothing, exit 74) — fetch both, both pinned.
       - name: Fetch the publisher (tebako release v0.1.1, sha256-pinned)
         shell: bash
         run: |
@@ -148,9 +150,13 @@ jobs:
           mkdir -p .packager
           curl -sL --fail -o .packager/tebako \
             https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-0.1.1-macos-arm64
+          curl -sL --fail -o .packager/tebako-shim \
+            https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-shim-0.1.1-macos-arm64
           echo "025fdf6948ab678895004349c7ada9c4a13676de5d1eb71bdac40dedcae73d84  .packager/tebako" \
             | shasum -a 256 -c -
-          chmod +x .packager/tebako
+          echo "d3252cae0629ebfc2a912ea0136ef523c7011c2a2697c89d5361e242f4f7a487  .packager/tebako-shim" \
+            | shasum -a 256 -c -
+          chmod +x .packager/tebako .packager/tebako-shim
           .packager/tebako --help > /dev/null
       - name: Publish (release + registry + clean-cache verify)
         shell: bash
