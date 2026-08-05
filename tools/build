@@ -102,6 +102,7 @@ sed -e "s|@@NAME@@|openjdk|g" \
     -e "s|@@UPSTREAM_SHA256@@|$SHA256|g" \
     -e "s|@@UPSTREAM_COMMIT@@|temurin-$VERSION+$BUILD|g" \
     -e "s|@@BLOB_SHA256@@|0000000000000000000000000000000000000000000000000000000000000000|g" \
+    -e "s|@@EXE_SUFFIX@@|$EXE_SUFFIX|g" \
     -e "s|platforms: \[.*\]|platforms: [$TRIPLET]|" \
     "$FEEDSTOCK/manifests/payload.yaml" > "$ROOT/__tpkg__/manifest.yaml"
 
