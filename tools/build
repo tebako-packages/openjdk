@@ -44,7 +44,9 @@ sha256_check() { echo "$1  $2" | { sha256sum -c - 2>/dev/null || shasum -a 256 -
 # parse both without a YAML dependency (the recipe's shape is the
 # feedstock's own convention, indentation-anchored).
 recipe_value() {
-  grep -E "^  $1:" "$FEEDSTOCK/recipe.yml" | head -1 | sed -E "s/^  $1: *\"?([^\"]*)\"?$/\1/"
+  # tolerate trailing comments (build: "8"  # …) — the value ends at the
+  # closing quote; anything after it is dropped
+  grep -E "^  $1:" "$FEEDSTOCK/recipe.yml" | head -1 | sed -E "s/^  $1: *\"?([^\"]*)\"?.*$/\1/"
 }
 recipe_source_value() {
   awk -v platform="$TRIPLET" -v key="$1" '
