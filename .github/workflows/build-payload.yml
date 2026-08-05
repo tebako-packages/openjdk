@@ -43,18 +43,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # bsdtar is the only msys2 need: the recipe's windows source is a
-      # zip and GNU tar cannot read it (the macOS leg uses system tar).
-      # gcc-libs is explicit: the v0.1.1 windows tfs binary imports the
-      # ucrt64 gcc-runtime DLLs (libstdc++-6, libwinpthread-1) and both
-      # the fetch-step smoke and the payload step resolve them from here.
-      - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime)
+      # bsdtar: the recipe's windows source is a zip and GNU tar cannot
+      # read it (the macOS leg uses system tar). gcc-libs is explicit:
+      # the v0.1.1 windows tfs binary imports the ucrt64 gcc-runtime DLLs
+      # (libstdc++-6, libwinpthread-1) and both the fetch-step smoke and
+      # the payload step resolve them from here. ucrt64 ruby: the build's
+      # read-back step parses the embedded manifest as YAML (the macOS
+      # leg uses the system ruby).
+      - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime + ruby)
         if: matrix.platform.triplet == 'x86_64-windows-ucrt'
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: ucrt64
           path-type: minimal
-          install: mingw-w64-ucrt-x86_64-libarchive mingw-w64-ucrt-x86_64-gcc-libs
+          install: >-
+            mingw-w64-ucrt-x86_64-libarchive
+            mingw-w64-ucrt-x86_64-gcc-libs
+            mingw-w64-ucrt-x86_64-ruby
 
       # The imager (tfs mkimage/extract) is the product repo's own
       # published binary — releases are the interface; the feedstock
