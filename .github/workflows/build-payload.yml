@@ -43,23 +43,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # bsdtar: the recipe's windows source is a zip and GNU tar cannot
-      # read it (the macOS leg uses system tar). gcc-libs is explicit:
-      # the v0.1.1 windows tfs binary imports the ucrt64 gcc-runtime DLLs
-      # (libstdc++-6, libwinpthread-1) and both the fetch-step smoke and
-      # the payload step resolve them from here. ucrt64 ruby: the build's
-      # read-back step parses the embedded manifest as YAML (the macOS
-      # leg uses the system ruby).
-      - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime + ruby)
+      # bsdtar is the only msys2 need: the recipe's windows source is a
+      # zip and GNU tar cannot read it (the macOS leg uses system tar).
+      # gcc-libs is explicit: the v0.1.1 windows tfs binary imports the
+      # ucrt64 gcc-runtime DLLs (libstdc++-6, libwinpthread-1) and both
+      # the fetch-step smoke and the payload step resolve them from here.
+      - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime)
         if: matrix.platform.triplet == 'x86_64-windows-ucrt'
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
         with:
           msystem: ucrt64
           path-type: minimal
-          install: >-
-            mingw-w64-ucrt-x86_64-libarchive
-            mingw-w64-ucrt-x86_64-gcc-libs
-            mingw-w64-ucrt-x86_64-ruby
+          install: mingw-w64-ucrt-x86_64-libarchive mingw-w64-ucrt-x86_64-gcc-libs
 
       # The imager (tfs mkimage/extract) is the product repo's own
       # published binary — releases are the interface; the feedstock
@@ -146,6 +141,8 @@ jobs:
           done
       # The publisher is the product repo's published CLI (same release
       # line as the imager), sha256-pinned — never a from-source build.
+      # tebako publish also needs the dispatcher (it refuses to register
+      # shims pointing at nothing, exit 74) — fetch both, both pinned.
       - name: Fetch the publisher (tebako release v0.1.1, sha256-pinned)
         shell: bash
         run: |
@@ -153,9 +150,13 @@ jobs:
           mkdir -p .packager
           curl -sL --fail -o .packager/tebako \
             https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-0.1.1-macos-arm64
+          curl -sL --fail -o .packager/tebako-shim \
+            https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-shim-0.1.1-macos-arm64
           echo "025fdf6948ab678895004349c7ada9c4a13676de5d1eb71bdac40dedcae73d84  .packager/tebako" \
             | shasum -a 256 -c -
-          chmod +x .packager/tebako
+          echo "d3252cae0629ebfc2a912ea0136ef523c7011c2a2697c89d5361e242f4f7a487  .packager/tebako-shim" \
+            | shasum -a 256 -c -
+          chmod +x .packager/tebako .packager/tebako-shim
           .packager/tebako --help > /dev/null
       - name: Publish (release + registry + clean-cache verify)
         shell: bash

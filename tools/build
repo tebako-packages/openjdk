@@ -120,27 +120,37 @@ echo "sha256: $sha"
 # -------------------------------------------------------------- read-back
 # A broken payload fails THIS leg, never the publish step: re-read the
 # image with the same tfs CLI that wrote it. The embedded tier-1 manifest
-# must exist and parse as YAML, and every entrypoint it declares must
-# exist in the image. (The publish exit-65 incident: an embedded manifest
-# that was not valid YAML shipped to the release step.)
+# must exist and validate, and every entrypoint it declares must exist in
+# the image. (The publish exit-65 incident: an embedded manifest that was
+# not valid YAML shipped to the release step.) The CLI's info surface
+# runs the same tpkg manifest model the publisher parses — build-time
+# parity with the check that caught the incident, no YAML-parser
+# dependency on the leg.
 # Path rules (windows leg): the native tfs takes the host image path in
 # native form (cygpath; inert on POSIX), while the VFS paths
 # (/__tpkg__/manifest.yaml, the declared /bin/… entrypoints) must reach
 # it verbatim — Git-bash/msys2 argument conversion would otherwise
 # rewrite them to host paths (MSYS2_ARG_CONV_EXCL, inert on POSIX).
-step "read-back: embedded manifest parses, declared entrypoints present"
+step "read-back: embedded manifest validates, declared entrypoints present"
 native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 IMG_NATIVE="$(native_path "$IMG")"
-EMBEDDED="$(MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" cat "$IMG_NATIVE" /__tpkg__/manifest.yaml)" || {
+MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" stat "$IMG_NATIVE" /__tpkg__/manifest.yaml >/dev/null || {
   echo "read-back FAILED: no /__tpkg__/manifest.yaml in $IMG"; exit 1; }
-ENTRY_PATHS="$(printf '%s' "$EMBEDDED" | ruby --disable-gems -ryaml -e '
-  $stdout.binmode   # ucrt64 ruby text mode would emit \r\n (breaks read -r)
-  m = YAML.load(STDIN.read)
-  es = (m.dig("provides", "executables") || []) + (m.dig("provides", "entrypoints") || [])
-  es.each { |e| puts e["path"] }')" || {
-  echo "read-back FAILED: embedded manifest is not valid YAML"; exit 1; }
+INFO="$(MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" info --json "$IMG_NATIVE")" || {
+  echo "read-back FAILED: tfs info cannot read $IMG"; exit 1; }
+case "$INFO" in
+  *'"manifest_error"'*)
+    printf '%s\n' "$INFO" | grep '"manifest_error"' >&2
+    echo "read-back FAILED: embedded manifest does not validate" >&2; exit 1 ;;
+esac
+# the declared executables, from the validated model's own provides view
+# (the [ -n ] guard keeps a provides-render change a loud failure, never
+# a silent pass)
+ENTRY_PATHS="$(MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" info --provides "$IMG_NATIVE" \
+  | sed -n 's/^ *executable [^ ]* → \([^ ]*\)  .*$/\1/p')"
+[ -n "$ENTRY_PATHS" ] || {
+  echo "read-back FAILED: no declared executables found in the validated manifest"; exit 1; }
 while IFS= read -r p; do
-  p="${p%$'\r'}"   # belt-and-braces with the binmode above
   [ -n "$p" ] || continue
   MSYS2_ARG_CONV_EXCL='*' "$TFS_CLI" stat "$IMG_NATIVE" "$p" >/dev/null || {
     echo "read-back FAILED: declared entrypoint $p missing from $IMG"; exit 1; }
