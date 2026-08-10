@@ -30,24 +30,24 @@ jobs:
             os: macos-14
             exe_suffix: ""
             tar: tar
-            tfs_asset: tfs-0.1.1-macos-arm64
-            tfs_sha256: b1848bda4d12ec520faa682adf293f58e07ba6fedc28e373911cff24e56fe412
+            tfs_asset: tfs-0.1.2-macos-arm64
+            tfs_sha256: 4b791be221501e03f2f64af155ebe6ef903f3a4a2c25733d93bfa2afb3165688
           - triplet: x86_64-windows-ucrt
             asset_platform: windows-ucrt64
             os: windows-latest
             exe_suffix: .exe
             # bsdtar (ucrt64 libarchive) reads the windows zip; GNU tar cannot.
             tar: /d/a/_temp/msys64/ucrt64/bin/bsdtar.exe
-            tfs_asset: tfs-0.1.1-windows-ucrt64.exe
-            tfs_sha256: 82ed22135321449c81530e1fabeba73555195ea411e0d9cca4458a23fe5ad01c
+            tfs_asset: tfs-0.1.2-windows-ucrt64.exe
+            tfs_sha256: 66173b956ffd839d16954a3659177cbc2dc7bae6ba7b5330b1eb26bf83a4ea95
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # bsdtar is the only msys2 need: the recipe's windows source is a
       # zip and GNU tar cannot read it (the macOS leg uses system tar).
-      # gcc-libs is explicit: the v0.1.1 windows tfs binary imports the
-      # ucrt64 gcc-runtime DLLs (libstdc++-6, libwinpthread-1) and both
-      # the fetch-step smoke and the payload step resolve them from here.
+      # gcc-libs rides along for any ucrt64 toolchain binary that still
+      # wants the gcc-runtime DLLs; the v0.1.2 tebako binaries themselves
+      # are statically linked (the release's ship gate audits PE imports).
       - name: Set up MSys2 (ucrt64 bsdtar + gcc runtime)
         if: matrix.platform.triplet == 'x86_64-windows-ucrt'
         uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
@@ -58,10 +58,10 @@ jobs:
 
       # The imager (tfs mkimage/extract) is the product repo's own
       # published binary — releases are the interface; the feedstock
-      # never builds the tebako stack from source. v0.1.1 ships no
-      # SHA256SUMS asset yet, so the hash is pinned in the matrix like
+      # never builds the tebako stack from source. The hash is pinned in
+      # the matrix (cross-checked against the release's SHA256SUMS) like
       # the recipe pins the Temurin archive's.
-      - name: Fetch the imager (tebako release v0.1.1, sha256-pinned)
+      - name: Fetch the imager (tebako release v0.1.2, sha256-pinned)
         shell: bash
         env:
           TRIPLET: ${{ matrix.platform.triplet }}
@@ -72,10 +72,10 @@ jobs:
           set -euo pipefail
           mkdir -p .packager
           curl -sL --fail -o "$TFS_BIN" \
-            "https://github.com/tamatebako/tebako/releases/download/v0.1.1/$TFS_ASSET"
+            "https://github.com/tamatebako/tebako/releases/download/v0.1.2/$TFS_ASSET"
           echo "$TFS_SHA256  $TFS_BIN" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
           chmod +x "$TFS_BIN"
-          # The v0.1.1 windows binary dynamically imports the ucrt64
+          # The v0.1.2 windows binary dynamically imports the ucrt64
           # gcc-runtime DLLs (libstdc++-6, libwinpthread-1) — off the
           # default PATH the loader kills it with a silent exit 127.
           # Resolve them from the msys2 install (the payload step's
@@ -143,18 +143,18 @@ jobs:
       # line as the imager), sha256-pinned — never a from-source build.
       # tebako publish also needs the dispatcher (it refuses to register
       # shims pointing at nothing, exit 74) — fetch both, both pinned.
-      - name: Fetch the publisher (tebako release v0.1.1, sha256-pinned)
+      - name: Fetch the publisher (tebako release v0.1.2, sha256-pinned)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .packager
           curl -sL --fail -o .packager/tebako \
-            https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-0.1.1-macos-arm64
+            https://github.com/tamatebako/tebako/releases/download/v0.1.2/tebako-0.1.2-macos-arm64
           curl -sL --fail -o .packager/tebako-shim \
-            https://github.com/tamatebako/tebako/releases/download/v0.1.1/tebako-shim-0.1.1-macos-arm64
-          echo "025fdf6948ab678895004349c7ada9c4a13676de5d1eb71bdac40dedcae73d84  .packager/tebako" \
+            https://github.com/tamatebako/tebako/releases/download/v0.1.2/tebako-shim-0.1.2-macos-arm64
+          echo "9d8328168b93c1828059ba90baf13b4855a7de483b25ae9df9c596c1e83634a3  .packager/tebako" \
             | shasum -a 256 -c -
-          echo "d3252cae0629ebfc2a912ea0136ef523c7011c2a2697c89d5361e242f4f7a487  .packager/tebako-shim" \
+          echo "03bf1d5c93a50a66e31ee6443c6d88527c325828ec5910ca1a9980e8b8f6a134  .packager/tebako-shim" \
             | shasum -a 256 -c -
           chmod +x .packager/tebako .packager/tebako-shim
           .packager/tebako --help > /dev/null
