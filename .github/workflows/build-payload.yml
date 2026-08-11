@@ -193,8 +193,10 @@ jobs:
           branch="publish/${{ github.ref_name }}-registry"
           git checkout -b "$branch"
           git add tpkg-registry.yaml
-          git commit -m "publish ${{ github.ref_name }}: registry entry (macos-arm64, windows-ucrt64)"
-          git push origin "$branch"
+          git commit -m "publish ${{ github.ref_name }}: registry entry"
+          # force-with-lease on the bot branch: a re-publish re-creates it
+          # (the first attempt's branch rejected the second's push, 21.0.12)
+          git push --force-with-lease origin "$branch"
           if ! gh pr view "$branch" >/dev/null 2>&1; then
             gh pr create --base main --head "$branch" \
               --title "publish ${{ github.ref_name }}: registry entry" \
