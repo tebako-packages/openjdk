@@ -167,9 +167,15 @@ echo "manifest: $OUT/payload-$TRIPLET.yaml"
 step "boot smoke (the imaged java answers -version)"
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
-"$TFS_CLI" extract "$IMG" -d "$TMPD" > /dev/null
-"$TMPD/bin/java$EXE_SUFFIX" -version 2>&1 | head -2 || {
-  echo "::warning::java -version failed on the extracted tree (check the exec closure)"
+# stage verdicts, never swallowed: the extract and the exec each say
+# their named failure (the 2026-08-11 linux leg died mute inside 40 ms).
+if ! out=$("$TFS_CLI" extract "$IMG" -d "$TMPD" 2>&1); then
+  echo "::error::tfs extract failed: $out"
   exit 1
-}
+fi
+if ! out=$("$TMPD/bin/java$EXE_SUFFIX" -version 2>&1); then
+  echo "::error::java -version failed on the extracted tree: $out"
+  exit 1
+fi
+echo "$out" | head -2
 echo "boot smoke OK"
