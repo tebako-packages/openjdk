@@ -40,6 +40,13 @@ jobs:
             tar: /d/a/_temp/msys64/ucrt64/bin/bsdtar.exe
             tfs_asset: tfs-0.1.3-windows-ucrt64.exe
             tfs_sha256: 56e9477d3f7d8b3c04423acda06c0d7f4e1cc5fb98ae0a34725efeb364042b54
+          - triplet: x86_64-linux-gnu
+            asset_platform: linux-gnu-x86_64
+            os: ubuntu-24.04
+            exe_suffix: ""
+            tar: tar
+            tfs_asset: tfs-0.1.3-linux-gnu-x86_64
+            tfs_sha256: 6317ad21de04d6e935e307acc14461cede851dec9f0faec091a786e13c419b73
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -166,6 +173,7 @@ jobs:
             --release "tfs:github:tebako-packages/openjdk:${{ github.ref_name }}" \
             --payload "aarch64-macos=out/aarch64-macos/openjdk-${{ github.ref_name }}-macos-arm64.tfs" \
             --payload "x86_64-windows-ucrt=out/x86_64-windows-ucrt/openjdk-${{ github.ref_name }}-windows-ucrt64.tfs" \
+            --payload "x86_64-linux-gnu=out/x86_64-linux-gnu/openjdk-${{ github.ref_name }}-linux-gnu-x86_64.tfs" \
             --registry-out "$GITHUB_WORKSPACE/tpkg-registry.yaml"
       # main is branch-protected (and the GitHub-Actions bypass is not
       # available on this plan): the registry lands by bot PR + auto-merge,
@@ -192,4 +200,4 @@ jobs:
               --title "publish ${{ github.ref_name }}: registry entry" \
               --body "Automated registry entry for ${{ github.ref_name }} (the build-payload publish job; main is protected, so the registry lands by PR)."
           fi
-          gh pr merge --auto --squash "$branch"
+          gh pr merge --auto --squash "$branch" || gh pr merge --squash "$branch"
