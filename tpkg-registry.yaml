@@ -11,6 +11,9 @@ payloads:
       x86_64-windows-ucrt:
         artifact: openjdk-21.0.12-windows-ucrt64.tfs
         sha256: a4bbeab2eccb7b5d0560bcadffb831c85745c277e5d8e40c71d851161cf30bea
+      x86_64-linux-gnu:
+        artifact: openjdk-21.0.12-linux-gnu-x86_64.tfs
+        sha256: a5c6aece5b30605eed66eb1e89db6a63807f0ec1e8c23dc0ee664fd7f800fcac
     release:
       ref: tfs:github:tebako-packages/openjdk:21.0.12
     entrypoints:
