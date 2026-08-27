@@ -7,15 +7,15 @@ payloads:
     platforms:
       aarch64-macos:
         artifact: openjdk-21.0.12-macos-arm64.tfs
-        sha256: f5f6ab8d33874f63fcc81705e20d0b26fed5ac44a145a05881a6b9fbd7983523
-      x86_64-windows-ucrt:
-        artifact: openjdk-21.0.12-windows-ucrt64.tfs
-        sha256: 3d3b9dad8bd4d17136eacb2ca4a5e3a9cb44dc3fb354f27c5e0bb3affb3947f6
+        sha256: '95bbe6ee52d376281923e6816236b8ca3d54a7d817d4cad03ca80364a81f8309'
       x86_64-linux-gnu:
         artifact: openjdk-21.0.12-linux-gnu-x86_64.tfs
-        sha256: a5c6aece5b30605eed66eb1e89db6a63807f0ec1e8c23dc0ee664fd7f800fcac
+        sha256: '626389dab69bc7bc24a36917fe6a4c0e81d2f96c80e5b9aa4dd3e5ffc7e87257'
+      x86_64-windows-ucrt:
+        artifact: openjdk-21.0.12-windows-ucrt64.tfs
+        sha256: '2e099706a8bbf80c760e56229370c907ef97aadb281cb89d993c043f27ddfa57'
     release:
-      ref: tfs:github:tebako-packages/openjdk:21.0.12
+      ref: tfs:github:tebako-packages/openjdk:21.0.12-2
     entrypoints:
     - java
     - keytool
