@@ -1,0 +1,25 @@
+schema_version: 1
+# Registry template for the openjdk RUNTIME entry — rendered by the
+# publish job (sed tokens from the built shards/sidecars) and landed on
+# main by bot PR, replacing tools' `tebako publish --registry-out` flow
+# (the CLI refuses kind: runtime — runtimes publish through the runtime
+# release flow). kind: runtime entries carry NO entrypoints key (the
+# registry validator: only apps and toolkits declare entrypoints).
+payloads:
+- name: openjdk
+  kind: runtime
+  versions:
+  - version: '@@VERSION@@'
+    platforms:
+      aarch64-macos:
+        artifact: @@STEM@@-macos-arm64.tfs
+        sha256: '@@SHA256_MACOS@@'
+      x86_64-linux-gnu:
+        artifact: @@STEM@@-linux-gnu-x86_64.tfs
+        sha256: '@@SHA256_LINUX@@'
+      x86_64-windows-ucrt:
+        artifact: @@STEM@@-windows-ucrt64.tfs
+        sha256: '@@SHA256_WINDOWS@@'
+    release:
+      ref: tfs:github:tebako-packages/openjdk:@@TAG@@
+  default: '@@VERSION@@'
