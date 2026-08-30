@@ -1,0 +1,44 @@
+schema_version: 1
+# Runtime manifest template for openjdk (spec 03 §2.2, kind: runtime;
+# filled from recipe.yml's upstream/runtime blocks by tools/build).
+identity:
+  schema_version: 1
+  kind: runtime
+  name: "openjdk"
+  version: "@@VERSION@@"
+  producer: {tool: feedstock-build, tool_version: "1"}
+  created: "@@CREATED@@"
+  source: {src_sha256: "@@UPSTREAM_SHA256@@", commit: "@@UPSTREAM_COMMIT@@", builder: "local"}
+  digest:
+    tree_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"  # placeholder until the CAS lands (spec 03)
+    blob_sha256: "@@BLOB_SHA256@@"   # zeroed inside the image (spec 03 §7)
+  signing: {state: unsigned}
+  encryption: {state: none}
+  # The payload root IS a JAVA_HOME (the JRE's own layout: bin/java[.exe],
+  # lib/, release). The annotation is ALSO the exec-cache whole-tree
+  # materialization trigger (crates/tfs mount_is_home reads
+  # identity.annotations.java_home): under visibility: exec-cache the
+  # mounted env image materializes into TEBAKO_EXEC_CACHE and the JVM
+  # runs from host-real files.
+  annotations: {java_home: "/"}
+provides:
+  provides:
+    engine: "@@ENGINE@@"
+    version: "@@VERSION@@"
+    abi_line: "@@ABI_LINE@@"
+    platform: "@@TRIPLET@@"
+  built_from:
+    src_sha256: "@@UPSTREAM_SHA256@@"
+    patch_set: "none"   # a repack applies no patches; the field is required non-empty
+  # NOTE (verified 2026-08-30): `tfs mkimage` normalizes the embedded
+  # manifest THROUGH the tpkg model (it computes tree_hash and zeroes
+  # blob_sha256 for the spec 03 §7 fixed point) — keys the model does not
+  # carry are STRIPPED. So spec 28 §8's `implementation` and spec 30's
+  # runtime `entrypoints` cannot ride this manifest until tpkg learns
+  # them; today the engine inventory lives in recipe.yml's
+  # runtime.entrypoints (the feedstock SSOT — tools/build gates every
+  # declared tool's presence at read-back) and the implementation in
+  # recipe.yml's runtime.implementation. No product surface reads either
+  # yet (identity flows via engine + version).
+  env: {}
+  capabilities: {exec: true, read: true, runtime: true}

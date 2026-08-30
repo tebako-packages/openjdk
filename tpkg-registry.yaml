@@ -1,22 +1,29 @@
 schema_version: 1
+# kind: runtime entry — the intended post-publish state (the publish job
+# renders manifests/registry.yaml with the real per-platform digests from
+# the tag build and lands it here by bot PR; `tebako publish` refuses
+# kind: runtime). NO entrypoints key: the registry validator reserves
+# entrypoints to apps and toolkits (spec 30's runtime dispatch surface is
+# PLANNED product-side).
+#
+# The macos-arm64 digest below is the LOCAL dogfood build's (the draft
+# PR's evidence); the linux/windows digests land with the first tag
+# build of the v2.0.0 runtime release.
 payloads:
 - name: openjdk
-  kind: toolkit
+  kind: runtime
   versions:
   - version: '21.0.12'
     platforms:
       aarch64-macos:
-        artifact: openjdk-21.0.12-macos-arm64.tfs
-        sha256: '95bbe6ee52d376281923e6816236b8ca3d54a7d817d4cad03ca80364a81f8309'
+        artifact: tebako-runtime-2.0.0-21.0.12-macos-arm64.tfs
+        sha256: '502d9d6e978eed68f3b0b390a63da5b83bd4f25ad007e77c76ed279952511f83'
       x86_64-linux-gnu:
-        artifact: openjdk-21.0.12-linux-gnu-x86_64.tfs
-        sha256: '626389dab69bc7bc24a36917fe6a4c0e81d2f96c80e5b9aa4dd3e5ffc7e87257'
+        artifact: tebako-runtime-2.0.0-21.0.12-linux-gnu-x86_64.tfs
+        sha256: 'pending-first-tag-build'
       x86_64-windows-ucrt:
-        artifact: openjdk-21.0.12-windows-ucrt64.tfs
-        sha256: '2e099706a8bbf80c760e56229370c907ef97aadb281cb89d993c043f27ddfa57'
+        artifact: tebako-runtime-2.0.0-21.0.12-windows-ucrt64.tfs
+        sha256: 'pending-first-tag-build'
     release:
-      ref: tfs:github:tebako-packages/openjdk:21.0.12-2
-    entrypoints:
-    - java
-    - keytool
+      ref: tfs:github:tebako-packages/openjdk:v2.0.0
   default: '21.0.12'

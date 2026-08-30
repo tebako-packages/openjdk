@@ -1,8 +1,8 @@
 # Feedstock recipe for openjdk
 # spec 13 §9 + docs/conventions.md in tebako-packages/index
 name: "openjdk"
-kind: toolkit
-summary: "OpenJDK (Temurin JRE) — the hermetic java for metanorma's jing/mn2pdf chain"
+kind: runtime
+summary: "OpenJDK (Temurin JRE) — a tebako java RUNTIME pair (wrapper exe + env image); the hermetic java for metanorma's jing/mn2pdf chain"
 
 upstream:
   # Eclipse Temurin JRE 21.0.12+8 (Adoptium) — one binary source per
@@ -29,29 +29,59 @@ build:
   system: repack          # no compilation: unpack, prune, image
   deps: []
 
-# Factory tools used by tools/build (the imager) and the publish job (the
-# packager + dispatcher): the tebako/tfs CLIs from the tamatebako/tebako
-# release. The asset digests are pinned HERE — tools.sha256 is the repo's
+# The runtime contract (spec 28 revised §8 + spec 29). tools/build renders
+# manifests/runtime.yaml (tier-1, embedded at /__tpkg__/manifest.yaml) and
+# manifests/layout.yaml (the driver pair contract, /lib/tebako/layout.yaml)
+# from this block — the feedstock's SSOT for the pair's declared identity.
+runtime:
+  engine: "java"
+  implementation: "temurin"        # REQUIRED for kind: runtime (spec 28 §8)
+  language_version: "21"           # the java language line (JAVA_VERSION's major)
+  abi_line: "21"                   # the JVM's own line grammar; java has no native-ext ABI grammar
+  contract_version: 2              # the spec 17 driver contract the wrapper speaks
+  interpreter_api_version: "21"    # layout.yaml's required declared line
+  interpreter: "/bin/java"         # the wrapper's interpreter grant (layout schema_minor 4)
+  # The complete bin/ inventory of the staged JRE (spec 03 §2.2
+  # completeness — verified against the staged tree 2026-08-30). The
+  # spec-30 expose/dispatch surface for a runtime's own entries is
+  # PLANNED product-side; until it lands these ride the runtime
+  # manifest's additive entrypoints list and NO shim surface exists.
+  entrypoints: [java, jfr, jrunscript, jwebserver, keytool, rmiregistry]
+  visibility: "exec-cache"         # spec 29 §3: a JVM needs no VFS once its home is materialized; universal across triplets
+  mount_root_override: false       # closed default — nothing in the JVM follows TEBAKO_MOUNT_ROOT; granting a no-op knob violates spec 00 §9
+  # The tebako product line the pair builds against: the wrapper exe
+  # (tebako-runtime-launcher) and the preload shim (link-unit). The line
+  # number names the artifacts (tebako-runtime-<line>-21.0.12-*) and the
+  # release tag (v<line> — the trr convention: the tag IS the tebako
+  # line; distinct from the toolkit-era payload tags like 21.0.12-2).
+  #
+  # WARNING: NO PUBLISHED tebako RELEASE SHIPS tebako-runtime-launcher
+  # YET (tamatebako/tebako#498 merged after v2.0.0). v2.0.0 DOES ship the
+  # link-unit (pinned below). CI's wrapper-fetch leg is a truthful red
+  # until the first wrapper-carrying product release — the pin then moves
+  # to that line and the artifact names follow. The local dogfood built
+  # the wrapper from tamatebako/tebako@d61ccc50 (workspace version 2.0.0).
+  wrapper_tebako: "2.0.0"
+
+# Factory tools used by tools/build (the imager + the preload shim): the
+# tfs CLI and the link-unit tarball from the tamatebako/tebako release.
+# The asset digests are pinned HERE — tools.sha256 is the repo's
 # toolchain pin SSOT (the workflow carries no version or digest literals;
-# tools/pins.rb reads this block into $GITHUB_ENV) and cross-checked
-# against the release's SHA256SUMS at fetch time (the same trust-anchor
-# role as upstream's per-platform sha256).
+# tools/pins.rb reads this block into $GITHUB_ENV). The tfs pins are
+# cross-checked against the release's SHA256SUMS at fetch time; the
+# link-unit tarballs are NOT in that monolith, so these pins are their
+# single trust anchor (verified against the v2.0.0 downloads 2026-08-30).
 tools:
   repo: "tamatebako/tebako"
-  release: "v0.3.1"
+  release: "v2.0.0"
   sha256:
-    tebako:
-      macos-arm64: "ea95d642c8bfa03c23a7c4f868c42bb81cbbbbfb87fe28e0e28db0067a850b6e"
-      linux-gnu-x86_64: "034804fae6e25f654c64f08889f11ff55e0bdf46dd446d489fb25734b47aadc0"
-      windows-ucrt64: "6e86abeb16b3745bdb65e936567bbb255b73b84bcb43fccbf6e93f971cd09984"
-    tebako-shim:
-      macos-arm64: "eaf022a9e889afc23a70872bf8233904897dd94c9b62a65eb77fbd5c36c20710"
-      linux-gnu-x86_64: "3fa00b2e91199514407cb2100fd9c08c787923422cf2c223d74f1c6d97032e1d"
-      windows-ucrt64: "1c1a5dd9384b0952286eec1141d3164ae6e34baa2f0e040f787a7d5b0a8ef5a5"
     tfs:
-      macos-arm64: "4136cf476a9e7470d401ee66546a841edf154e6a39f6083021b1f8786b6cc755"
-      linux-gnu-x86_64: "2dca2fe24401dc7110d7d3297984023e44eb466727ec3cf74459d3d14ea8d623"
-      windows-ucrt64: "4fde6e7252a0aef0767fb09c08971396b004f0d25f39f05c774ab8644bd1efe2"
+      macos-arm64: "3f9f6b40397114e95bd7b98a2179ef7a4201329280fe501067d150c3d6cfa336"
+      linux-gnu-x86_64: "e93d7e05a4c5574930611fb648818c2e79a34270542c8c57f01b443516a798bc"
+      windows-ucrt64: "a4fd2b5142b1e9dc21e70352ed100348a2fab8e5ee5f8ddf92f7b468b0dcc205"
+    link-unit:                       # POSIX legs only; the windows image omits preload_shim
+      macos-arm64: "2c9d24f8472d17d582de472e66e306e5b736a8ff8fe2e45dd5dc33c3e3846f0b"
+      linux-gnu-x86_64: "32f91719b88d824be11bbe4a699ee27a88d32887e39d307c6d3e69d702d8fde8"
 
 image:
   format: dwarfs

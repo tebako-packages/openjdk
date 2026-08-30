@@ -3,11 +3,28 @@ name: build-payload
 # One mechanical leg per (version × platform) in the recipe's sources —
 # aarch64-macos + x86_64-windows-ucrt + x86_64-linux-gnu.
 #
+# kind: runtime (spec 28/29): each leg ships the PAIR — the wrapper exe
+# (tebako-runtime-launcher) + the env image (.tfs) + sidecars + the
+# release shard. The publish job uploads the pair, derives the release
+# monoliths (manifest.json + SHA256SUMS.txt, trr#140) from the shards,
+# renders the registry entry from manifests/registry.yaml, and lands it
+# by bot PR. `tebako publish` is NOT used: the CLI refuses kind: runtime
+# (runtimes publish through the runtime release flow).
+#
 # PIN DISCIPLINE (the owner's rule): this workflow carries NO version or
 # digest literals. recipe.yml is the SSOT — the `tools:` block pins the
-# tebako/tfs CLIs (release + per-platform sha256); tools/pins.rb reads it
-# into $GITHUB_ENV and the fetch steps cross-check the pins against the
-# release's own SHA256SUMS (both anchored, provenance verified).
+# tfs CLI + the link-unit tarball (release + per-platform sha256), the
+# `runtime:` block pins the wrapper's product line; tools/pins.rb reads
+# them into $GITHUB_ENV and the fetch steps cross-check the pins against
+# the release's own SHA256SUMS where the monolith covers the asset (the
+# link-unit tarballs are NOT in it — the recipe pin is their anchor).
+#
+# KNOWN RED LEG: no published tebako release ships tebako-runtime-launcher
+# yet (tamatebako/tebako#498 merged after v2.0.0). The wrapper-fetch step
+# 404s until the first wrapper-carrying product release; the
+# runtime.wrapper_tebako pin moves then. The pair itself dogfooded green
+# locally with the wrapper built from tamatebako/tebako@d61ccc50 (see the
+# promotion PR body).
 on:
   push:
     branches: [main]
@@ -66,9 +83,11 @@ jobs:
           install: mingw-w64-ucrt-x86_64-libarchive mingw-w64-ucrt-x86_64-gcc-libs
 
       # recipe.yml's tools block is the toolchain pin SSOT; pins.rb emits
-      # TEBAKO_RELEASE/VERSION, PKG_NAME/PKG_VERSION and the per-platform
-      # TFS_ASSET/TFS_SHA256 for THIS leg's asset_platform. (windows: the
-      # runner's hosted Ruby serves Git-bash steps.)
+      # TEBAKO_RELEASE, PKG_NAME/PKG_VERSION, the per-platform
+      # TFS_ASSET/TFS_SHA256 + LINK_UNIT_ASSET/LINK_UNIT_SHA256 for THIS
+      # leg's asset_platform, the wrapper pin (WRAPPER_RELEASE/
+      # WRAPPER_ASSET), the RUNTIME_STEM naming base, and PRELOAD_SHIM on
+      # POSIX. (windows: the runner's hosted Ruby serves Git-bash steps.)
       - name: Read the toolchain pins (recipe.yml is the SSOT)
         shell: bash
         run: ruby tools/pins.rb "${{ matrix.platform.asset_platform }}" --env >> "$GITHUB_ENV"
@@ -98,7 +117,40 @@ jobs:
           # download just happened, not inside the payload step.
           "$TFS_BIN" > /dev/null
 
-      - name: Build the payload
+      # The wrapper exe — the runtime pair's process entry point (spec
+      # 29). Same releases-are-the-interface rule as the imager, but NO
+      # PUBLISHED RELEASE SHIPS IT YET (recipe.yml runtime.wrapper_tebako
+      # carries the warning): this step is a truthful red until the first
+      # wrapper-carrying product release, then green with no edit here.
+      - name: Fetch the wrapper (pinned by recipe.yml; red until the product ships it)
+        shell: bash
+        env:
+          WRAPPER_BIN: .packager/tebako-runtime-launcher${{ matrix.platform.exe_suffix }}
+        run: |
+          set -euo pipefail
+          mkdir -p .packager
+          base="https://github.com/tamatebako/tebako/releases/download/$WRAPPER_RELEASE"
+          curl -sL --fail -o "$WRAPPER_BIN" "$base/$WRAPPER_ASSET"
+          chmod +x "$WRAPPER_BIN"
+          echo "WRAPPER_BIN=$WRAPPER_BIN" >> "$GITHUB_ENV"
+
+      # The preload shim (POSIX legs only): the link-unit tarball carries
+      # libtfs_preload for the layout's preload_shim grant — the jail's
+      # host-IO binding survives the exec into the JVM. NOT in the
+      # release's SHA256SUMS monolith: the recipe pin is the anchor.
+      - name: Fetch the preload shim (link-unit, pinned by recipe.yml)
+        if: matrix.platform.exe_suffix == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .packager
+          base="https://github.com/tamatebako/tebako/releases/download/$TEBAKO_RELEASE"
+          curl -sL --fail -o .packager/link-unit.tar.gz "$base/$LINK_UNIT_ASSET"
+          echo "$LINK_UNIT_SHA256  .packager/link-unit.tar.gz" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
+          tar -xzf .packager/link-unit.tar.gz -C .packager
+          [ -f "$PRELOAD_SHIM" ] || { echo "::error::link-unit tarball carries no $PRELOAD_SHIM"; exit 1; }
+
+      - name: Build the runtime pair
         shell: bash
         env:
           TRIPLET: ${{ matrix.platform.triplet }}
@@ -106,9 +158,12 @@ jobs:
           EXE_SUFFIX: ${{ matrix.platform.exe_suffix }}
           TAR: ${{ matrix.platform.tar }}
           TFS_CLI: .packager/tfs${{ matrix.platform.exe_suffix }}
-        # The windows leg runs a closed PATH: the runner's default PATH
-        # carries several stray mingw installs, and keeping them out of
-        # DLL/tool resolution removes a whole silent-failure class.
+        # WRAPPER_BIN (the fetch step) and PRELOAD_SHIM (pins.rb, POSIX
+        # only) flow through $GITHUB_ENV — process env, not the static
+        # env: context. The windows leg runs a closed PATH: the runner's
+        # default PATH carries several stray mingw installs, and keeping
+        # them out of DLL/tool resolution removes a whole silent-failure
+        # class.
         run: |
           if [ "${{ matrix.platform.triplet }}" = "x86_64-windows-ucrt" ]; then
             export PATH="/d/a/_temp/msys64/ucrt64/bin:/c/Program Files/Git/usr/bin:/c/Program Files/Git/cmd:/c/Windows/System32"
@@ -128,9 +183,7 @@ jobs:
     needs: build
     runs-on: macos-14
     env:
-      TEBAKO_CLI: ${{ github.workspace }}/.packager/tebako
-      TEBAKO_HOME: ${{ github.workspace }}/.tebako
-      TEBAKO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Collect payloads (all legs)
@@ -149,52 +202,63 @@ jobs:
             mv "$d"* "out/$p/"
             rmdir "$d"
           done
-      # The publisher is the product repo's published CLI (same release
-      # line as the imager), pinned by recipe.yml's tools block — never a
-      # from-source build, no literals in this workflow. tebako publish
-      # also needs the dispatcher (it refuses to register shims pointing
-      # at nothing, exit 74) — fetch both, both pinned, both cross-checked
-      # against the release's SHA256SUMS.
+      # The runtime release flow (spec 28 §6): the tag IS the tebako
+      # product line (v<line>, the trr convention — the resolver's
+      # {base}/v<tebako_version>/<asset> URL shape answers it). Assets:
+      # the pair per platform + sidecars + shards, then the derived
+      # monoliths. `tebako publish` refuses kind: runtime
+      # (tebako-cli/src/publish.rs) — the registry entry is rendered from
+      # manifests/registry.yaml instead (the CLI never learns a runtime
+      # verb until the product ships one).
       - name: Read the toolchain pins (recipe.yml is the SSOT)
         run: ruby tools/pins.rb macos-arm64 --env >> "$GITHUB_ENV"
-      - name: Fetch the publisher (pinned by recipe.yml, sha256-verified)
+      - name: Create the release + upload the runtime pairs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .packager
-          base="https://github.com/tamatebako/tebako/releases/download/$TEBAKO_RELEASE"
-          curl -sL --fail -o .packager/tebako "$base/$TEBAKO_ASSET"
-          curl -sL --fail -o .packager/tebako-shim "$base/$SHIM_ASSET"
-          curl -sL --fail -o SHA256SUMS "$base/SHA256SUMS"
-          echo "$TEBAKO_SHA256  .packager/tebako" | shasum -a 256 -c -
-          echo "$SHIM_SHA256  .packager/tebako-shim" | shasum -a 256 -c -
-          for pair in "$TEBAKO_ASSET:$TEBAKO_SHA256" "$SHIM_ASSET:$SHIM_SHA256"; do
-            asset="${pair%%:*}"; want="${pair##*:}"
-            got=$(awk -v a="$asset" '$2 == a {print $1}' SHA256SUMS)
-            [ "$got" = "$want" ] || { echo "::error::pin mismatch for $asset: recipe.yml=$want release=${got:-ABSENT}"; exit 1; }
+          tag="${{ github.ref_name }}"
+          gh release create "$tag" --repo tebako-packages/openjdk \
+            --title "$tag — tebako-runtime openjdk (Temurin JRE $PKG_VERSION)" \
+            --notes "tebako java runtime pair (wrapper exe + env image) per platform; manifest.json is the release index, SHA256SUMS.txt the trust anchor." \
+            || gh release view "$tag" --repo tebako-packages/openjdk > /dev/null
+          for shard in out/*/tebako-runtime-*.manifest.json; do
+            dir="$(dirname "$shard")"
+            stem="$(basename "$shard" .manifest.json)"
+            # "$stem"* = the exe (+ .exe on windows), the .tfs, both
+            # .sha256 sidecars, the shard — never the sibling
+            # payload-<triplet>.yaml.
+            gh release upload --clobber "$tag" --repo tebako-packages/openjdk "$dir/$stem"*
           done
-          chmod +x .packager/tebako .packager/tebako-shim
-          .packager/tebako --help > /dev/null
-      # The payload filenames come from tools/build's own naming
-      # (<name>-<upstream.version>-<asset_platform>.tfs — recipe values,
-      # NOT the git tag: a tag may carry a feedstock revision suffix like
-      # 21.0.12-2 while the artifact keeps the upstream version).
-      - name: Publish (release + registry + clean-cache verify)
+      - name: Derive + upload the monoliths (manifest.json + SHA256SUMS.txt)
         shell: bash
         run: |
           set -euo pipefail
-          "$TEBAKO_CLI" publish --name "$PKG_NAME" \
-            --release "tfs:github:tebako-packages/openjdk:${{ github.ref_name }}" \
-            --payload "aarch64-macos=out/aarch64-macos/$PKG_NAME-$PKG_VERSION-macos-arm64.tfs" \
-            --payload "x86_64-windows-ucrt=out/x86_64-windows-ucrt/$PKG_NAME-$PKG_VERSION-windows-ucrt64.tfs" \
-            --payload "x86_64-linux-gnu=out/x86_64-linux-gnu/$PKG_NAME-$PKG_VERSION-linux-gnu-x86_64.tfs" \
-            --registry-out "$GITHUB_WORKSPACE/tpkg-registry.yaml"
+          tag="${{ github.ref_name }}"
+          ruby -rjson -e 'puts JSON.pretty_generate(ARGV.sort.map { |f| JSON.parse(File.read(f)) })' \
+            out/*/tebako-runtime-*.manifest.json > manifest.json
+          cat out/*/tebako-runtime-*.sha256 > SHA256SUMS.txt
+          gh release upload --clobber "$tag" --repo tebako-packages/openjdk manifest.json SHA256SUMS.txt
+      # The registry mirrors resolution fields only (L3): the env image
+      # is the named artifact per platform; kind: runtime carries NO
+      # entrypoints key (the validator: only apps and toolkits declare
+      # entrypoints).
+      - name: Render the registry entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          sha_for() { cut -d' ' -f1 "out/$1/$2.tfs.sha256"; }
+          sed -e "s|@@VERSION@@|$PKG_VERSION|g" \
+              -e "s|@@STEM@@|$RUNTIME_STEM_BASE|g" \
+              -e "s|@@TAG@@|$tag|g" \
+              -e "s|@@SHA256_MACOS@@|$(sha_for aarch64-macos "$RUNTIME_STEM_BASE-macos-arm64")|g" \
+              -e "s|@@SHA256_LINUX@@|$(sha_for x86_64-linux-gnu "$RUNTIME_STEM_BASE-linux-gnu-x86_64")|g" \
+              -e "s|@@SHA256_WINDOWS@@|$(sha_for x86_64-windows-ucrt "$RUNTIME_STEM_BASE-windows-ucrt64")|g" \
+              manifests/registry.yaml > tpkg-registry.yaml
       # main is branch-protected (and the GitHub-Actions bypass is not
       # available on this plan): the registry lands by bot PR + auto-merge,
       # never by direct push. Idempotent across re-runs of the same tag.
       - name: Publish the registry entry via pull request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "tebako-ci"
