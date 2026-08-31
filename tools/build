@@ -320,13 +320,16 @@ if ! out=$("$TFS_CLI" extract "$IMG" -d "$TMPD" 2>&1); then
   echo "::error::tfs extract failed: $out"
   exit 1
 fi
-# The declared spawn surface must ride the embedded manifest verbatim
-# (spec 30 §2 — the driver's bare-name check reads exactly these
-# declarations; the wrapper smoke below exercises only `java`).
+# The declared spawn surface must ride the embedded manifest (spec 30 §2
+# — the driver's bare-name check reads exactly these declarations; the
+# wrapper smoke below exercises only `java`). mkimage re-serializes the
+# manifest THROUGH the tpkg model (serde block style, unquoted scalars,
+# defaulted args_default) — match the model's output shape, not the
+# authored flow style: `name: ["']?<ep>["']?` at a value boundary.
 for ep in $ENTRYPOINTS; do
-  grep -q "name: \"$ep\"" "$TMPD/__tpkg__/manifest.yaml" || {
+  grep -Eq "name: [\"']?$ep[\"']?([,}]|$)" "$TMPD/__tpkg__/manifest.yaml" || {
     echo "::error::embedded manifest declares no entrypoint '$ep'"; exit 1; }
-  grep -q "path: \"/bin/$ep$EXE_SUFFIX\"" "$TMPD/__tpkg__/manifest.yaml" || {
+  grep -Eq "path: [\"']?/bin/$ep$EXE_SUFFIX[\"']?([,}]|$)" "$TMPD/__tpkg__/manifest.yaml" || {
     echo "::error::embedded manifest entrypoint '$ep' carries the wrong path"; exit 1; }
 done
 echo "read-back: all declared entrypoints ride the embedded manifest"
