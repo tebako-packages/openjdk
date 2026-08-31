@@ -88,10 +88,14 @@ unless ARGV.include?("--release-only")
   pairs["RUNTIME_STEM_BASE"] = "tebako-runtime-#{wrapper_tebako}-#{pkg_version}"
   pairs["RUNTIME_STEM"] = "#{pairs['RUNTIME_STEM_BASE']}-#{platform}"
   # The extracted preload shim (POSIX legs only; the windows image omits
-  # the grant — see manifests/layout.yaml).
+  # the grant — see manifests/layout.yaml). The tarball's internal top
+  # dir is VERSION-LESS (link-unit-<platform>/; the version lives in the
+  # asset name) — link-unit-stage.sh has tarred it that way since the
+  # script exists; the 08-30 legs died at the wrapper 404 before ever
+  # exercising this path, so the versioned guess was latent until v2.1.0.
   unless platform.start_with?("windows")
     dl_ext = platform.include?("macos") ? "dylib" : "so"
-    pairs["PRELOAD_SHIM"] = ".packager/link-unit-#{version}-#{platform}/libtfs_preload.#{dl_ext}"
+    pairs["PRELOAD_SHIM"] = ".packager/link-unit-#{platform}/libtfs_preload.#{dl_ext}"
   end
 end
 

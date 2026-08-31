@@ -42,10 +42,11 @@ runtime:
   interpreter_api_version: "21"    # layout.yaml's required declared line
   interpreter: "/bin/java"         # the wrapper's interpreter grant (layout schema_minor 4)
   # The complete bin/ inventory of the staged JRE (spec 03 §2.2
-  # completeness — verified against the staged tree 2026-08-30). The
-  # spec-30 expose/dispatch surface for a runtime's own entries is
-  # PLANNED product-side; until it lands these ride the runtime
-  # manifest's additive entrypoints list and NO shim surface exists.
+  # completeness — verified against the staged tree 2026-08-30). This is
+  # the feedstock SSOT for the spawn surface (spec 30 §2): tools/build
+  # renders it into the env image manifest's runtime entrypoints, the
+  # driver's bare-name --tebako-entry resolves against exactly these
+  # declarations, and the read-back + smoke gates prove them.
   entrypoints: [java, jfr, jrunscript, jwebserver, keytool, rmiregistry]
   visibility: "exec-cache"         # spec 29 §3: a JVM needs no VFS once its home is materialized; universal across triplets
   mount_root_override: false       # closed default — nothing in the JVM follows TEBAKO_MOUNT_ROOT; granting a no-op knob violates spec 00 §9

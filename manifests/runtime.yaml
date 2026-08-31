@@ -30,15 +30,18 @@ provides:
   built_from:
     src_sha256: "@@UPSTREAM_SHA256@@"
     patch_set: "none"   # a repack applies no patches; the field is required non-empty
-  # NOTE (verified 2026-08-30): `tfs mkimage` normalizes the embedded
-  # manifest THROUGH the tpkg model (it computes tree_hash and zeroes
-  # blob_sha256 for the spec 03 §7 fixed point) — keys the model does not
-  # carry are STRIPPED. So spec 28 §8's `implementation` and spec 30's
-  # runtime `entrypoints` cannot ride this manifest until tpkg learns
-  # them; today the engine inventory lives in recipe.yml's
-  # runtime.entrypoints (the feedstock SSOT — tools/build gates every
-  # declared tool's presence at read-back) and the implementation in
-  # recipe.yml's runtime.implementation. No product surface reads either
-  # yet (identity flows via engine + version).
+  # The spawn surface (spec 30 §2): the commands this runtime boots as a
+  # separate process for a consumer payload's `runtime` edge expose list.
+  # tpkg carries runtime entrypoints since tebako v2.1.0 (pre-2.1.0
+  # mkimage STRIPPED keys the model lacked — verified 2026-08-30).
+  # tools/build renders this block from recipe.yml's runtime.entrypoints
+  # (the feedstock SSOT): each name maps to /bin/<name>[.exe] — the
+  # JRE's own bin inventory; a runtime runs on itself, so no
+  # runtime_requirement. spec 28 §8's `implementation` still rides
+  # recipe.yml's runtime.implementation (tpkg's EngineProvides carries
+  # no such key; nothing product-side reads it — identity flows via
+  # engine + version).
+  entrypoints:
+@@ENTRYPOINTS_YAML@@
   env: {}
   capabilities: {exec: true, read: true, runtime: true}
