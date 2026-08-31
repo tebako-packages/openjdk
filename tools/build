@@ -178,6 +178,16 @@ fi
 # --------------------------------------------------------------- manifest
 step "embed /__tpkg__/manifest.yaml (blob digest zeroed, spec 03 §7)"
 mkdir -p "$ROOT/__tpkg__"
+# The spawn surface block (spec 30 §2): one {name, path} per recipe
+# runtime.entrypoints entry. The path carries EXE_SUFFIX on windows —
+# the driver's declared-path existence check opens the literal path.
+# The multi-line value rides ENVIRON into awk: BSD awk (the macOS
+# leg's /usr/bin/awk) rejects -v assignments carrying newlines.
+EP_YAML=""
+for ep in $ENTRYPOINTS; do
+  EP_YAML="$EP_YAML    - {name: \"$ep\", path: \"/bin/$ep$EXE_SUFFIX\"}
+"
+done
 sed -e "s|@@NAME@@|openjdk|g" \
     -e "s|@@VERSION@@|$VERSION|g" \
     -e "s|@@CREATED@@|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" \
@@ -187,7 +197,9 @@ sed -e "s|@@NAME@@|openjdk|g" \
     -e "s|@@ENGINE@@|$ENGINE|g" \
     -e "s|@@ABI_LINE@@|$ABI_LINE|g" \
     -e "s|@@TRIPLET@@|$TRIPLET|g" \
-    "$FEEDSTOCK/manifests/runtime.yaml" > "$ROOT/__tpkg__/manifest.yaml"
+    "$FEEDSTOCK/manifests/runtime.yaml" |
+  EP_YAML="$EP_YAML" awk '{ if (index($0, "@@ENTRYPOINTS_YAML@@")) printf "%s", ENVIRON["EP_YAML"]; else print }' \
+    > "$ROOT/__tpkg__/manifest.yaml"
 
 step "embed /lib/tebako/layout.yaml (the C3 pair contract)"
 mkdir -p "$ROOT/lib/tebako"
@@ -308,6 +320,16 @@ if ! out=$("$TFS_CLI" extract "$IMG" -d "$TMPD" 2>&1); then
   echo "::error::tfs extract failed: $out"
   exit 1
 fi
+# The declared spawn surface must ride the embedded manifest verbatim
+# (spec 30 §2 — the driver's bare-name check reads exactly these
+# declarations; the wrapper smoke below exercises only `java`).
+for ep in $ENTRYPOINTS; do
+  grep -q "name: \"$ep\"" "$TMPD/__tpkg__/manifest.yaml" || {
+    echo "::error::embedded manifest declares no entrypoint '$ep'"; exit 1; }
+  grep -q "path: \"/bin/$ep$EXE_SUFFIX\"" "$TMPD/__tpkg__/manifest.yaml" || {
+    echo "::error::embedded manifest entrypoint '$ep' carries the wrong path"; exit 1; }
+done
+echo "read-back: all declared entrypoints ride the embedded manifest"
 if ! out=$("$TMPD/bin/java$EXE_SUFFIX" -version 2>&1); then
   echo "::error::java -version failed on the extracted tree: $out"
   exit 1
