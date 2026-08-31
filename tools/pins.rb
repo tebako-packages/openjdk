@@ -76,11 +76,15 @@ unless ARGV.include?("--release-only")
     pairs["#{key}_ASSET"] = asset
     pairs["#{key}_SHA256"] = sha
   end
-  # The wrapper exe (spec 29): no published release ships it yet — the
-  # recipe's runtime.wrapper_tebako names the line; the fetch stays a
-  # truthful red leg until the first wrapper-carrying product release.
+  # The wrapper exe (spec 29): the recipe's runtime.wrapper_tebako names
+  # the line (ships since tebako v2.1.0); runtime.wrapper_sha256 is its
+  # per-platform trust anchor — a missing pin is a named error, never a
+  # guess (the launcher ships as the runtime pair's entry point).
   pairs["WRAPPER_RELEASE"] = "v#{wrapper_tebako}"
   pairs["WRAPPER_ASSET"] = "tebako-runtime-launcher-#{wrapper_tebako}-#{platform}#{exe}"
+  wrapper_shas = runtime.fetch("wrapper_sha256")
+  pairs["WRAPPER_SHA256"] = wrapper_shas[platform] ||
+                            die("recipe.yml: no runtime.wrapper_sha256.#{platform} pin")
   pairs["RUNTIME_STEM_BASE"] = "tebako-runtime-#{wrapper_tebako}-#{pkg_version}"
   pairs["RUNTIME_STEM"] = "#{pairs['RUNTIME_STEM_BASE']}-#{platform}"
   # The extracted preload shim (POSIX legs only; the windows image omits

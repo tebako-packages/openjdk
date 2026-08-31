@@ -55,13 +55,19 @@ runtime:
   # release tag (v<line> — the trr convention: the tag IS the tebako
   # line; distinct from the toolkit-era payload tags like 21.0.12-2).
   #
-  # WARNING: NO PUBLISHED tebako RELEASE SHIPS tebako-runtime-launcher
-  # YET (tamatebako/tebako#498 merged after v2.0.0). v2.0.0 DOES ship the
-  # link-unit (pinned below). CI's wrapper-fetch leg is a truthful red
-  # until the first wrapper-carrying product release — the pin then moves
-  # to that line and the artifact names follow. The local dogfood built
-  # the wrapper from tamatebako/tebako@d61ccc50 (workspace version 2.0.0).
-  wrapper_tebako: "2.0.0"
+  # v2.1.0 (2026-09-01) is the first product release shipping
+  # tebako-runtime-launcher on all 7 platforms (tamatebako/tebako#498,
+  # spec 30). The local dogfood built the wrapper from
+  # tamatebako/tebako@d61ccc50 (workspace version 2.0.0).
+  wrapper_tebako: "2.1.0"
+  # The wrapper's trust anchor, per tool-platform (the launcher is the
+  # shipped runtime pair's process entry point — an unauthenticated
+  # download would be a supply-chain hole). Digests are the v2.1.0
+  # release's per-asset .sha256 sidecars, fetched 2026-09-01.
+  wrapper_sha256:
+    macos-arm64: "2028c8be0c6fc1ba0296eca8a25f70f6de6212656bc271fcc728918bc4e44c4d"
+    linux-gnu-x86_64: "b304787b72fec9246f7664c18e26ed21e35a0f8d9e3ea8085a34adec954064ac"
+    windows-ucrt64: "680373e952ff77f99dd155ca7e99f5e082944ec68e0612474be9616e21485426"
 
 # Factory tools used by tools/build (the imager + the preload shim): the
 # tfs CLI and the link-unit tarball from the tamatebako/tebako release.
@@ -70,18 +76,18 @@ runtime:
 # tools/pins.rb reads this block into $GITHUB_ENV). The tfs pins are
 # cross-checked against the release's SHA256SUMS at fetch time; the
 # link-unit tarballs are NOT in that monolith, so these pins are their
-# single trust anchor (verified against the v2.0.0 downloads 2026-08-30).
+# single trust anchor (verified against the v2.1.0 downloads 2026-09-01).
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.0.0"
+  release: "v2.1.0"
   sha256:
     tfs:
-      macos-arm64: "3f9f6b40397114e95bd7b98a2179ef7a4201329280fe501067d150c3d6cfa336"
-      linux-gnu-x86_64: "e93d7e05a4c5574930611fb648818c2e79a34270542c8c57f01b443516a798bc"
-      windows-ucrt64: "a4fd2b5142b1e9dc21e70352ed100348a2fab8e5ee5f8ddf92f7b468b0dcc205"
+      macos-arm64: "744e6e37f83b19d976400f55440cee4486c060e5f1b671f6a4456940e20659db"
+      linux-gnu-x86_64: "e724ffd1c121ee38a105dc8403128ca3da07016eb2d9bd03fbfba36fa31ff6b0"
+      windows-ucrt64: "154bdd9968a29257fdc0c3e71338f29a960bb89411695ff79535eb9767b03643"
     link-unit:                       # POSIX legs only; the windows image omits preload_shim
-      macos-arm64: "2c9d24f8472d17d582de472e66e306e5b736a8ff8fe2e45dd5dc33c3e3846f0b"
-      linux-gnu-x86_64: "32f91719b88d824be11bbe4a699ee27a88d32887e39d307c6d3e69d702d8fde8"
+      macos-arm64: "c21aece7983ec227bbc7fcca6ac7bb755858a69bd3374673baea1a3a32d4436e"
+      linux-gnu-x86_64: "28b53ebaf03d67338b20681912066b9c44ad3066d4291b843d872f1e8c437fd1"
 
 image:
   format: dwarfs

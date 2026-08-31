@@ -19,12 +19,11 @@ name: build-payload
 # the release's own SHA256SUMS where the monolith covers the asset (the
 # link-unit tarballs are NOT in it — the recipe pin is their anchor).
 #
-# KNOWN RED LEG: no published tebako release ships tebako-runtime-launcher
-# yet (tamatebako/tebako#498 merged after v2.0.0). The wrapper-fetch step
-# 404s until the first wrapper-carrying product release; the
-# runtime.wrapper_tebako pin moves then. The pair itself dogfooded green
-# locally with the wrapper built from tamatebako/tebako@d61ccc50 (see the
-# promotion PR body).
+# The wrapper exe (tebako-runtime-launcher) ships since tebako v2.1.0
+# (2026-09-01, tamatebako/tebako#498 — spec 30); the
+# runtime.wrapper_tebako pin names that line. The pair first dogfooded
+# green locally with the wrapper built from tamatebako/tebako@d61ccc50
+# (see the promotion PR body).
 on:
   push:
     branches: [main]
@@ -118,11 +117,10 @@ jobs:
           "$TFS_BIN" > /dev/null
 
       # The wrapper exe — the runtime pair's process entry point (spec
-      # 29). Same releases-are-the-interface rule as the imager, but NO
-      # PUBLISHED RELEASE SHIPS IT YET (recipe.yml runtime.wrapper_tebako
-      # carries the warning): this step is a truthful red until the first
-      # wrapper-carrying product release, then green with no edit here.
-      - name: Fetch the wrapper (pinned by recipe.yml; red until the product ships it)
+      # 29). Same releases-are-the-interface rule as the imager; ships
+      # since tebako v2.1.0 (the recipe's runtime.wrapper_tebako pin
+      # names the line).
+      - name: Fetch the wrapper (pinned by recipe.yml)
         shell: bash
         env:
           WRAPPER_BIN: .packager/tebako-runtime-launcher${{ matrix.platform.exe_suffix }}
@@ -131,6 +129,7 @@ jobs:
           mkdir -p .packager
           base="https://github.com/tamatebako/tebako/releases/download/$WRAPPER_RELEASE"
           curl -sL --fail -o "$WRAPPER_BIN" "$base/$WRAPPER_ASSET"
+          echo "$WRAPPER_SHA256  $WRAPPER_BIN" | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; }
           chmod +x "$WRAPPER_BIN"
           echo "WRAPPER_BIN=$WRAPPER_BIN" >> "$GITHUB_ENV"
 
