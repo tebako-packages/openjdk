@@ -1,14 +1,10 @@
 schema_version: 1
-# kind: runtime entry — the intended post-publish state (the publish job
-# renders manifests/registry.yaml with the real per-platform digests from
-# the tag build and lands it here by bot PR; `tebako publish` refuses
-# kind: runtime). NO entrypoints key: the registry validator reserves
-# entrypoints to apps and toolkits (spec 30's runtime dispatch surface is
-# PLANNED product-side).
-#
-# The macos-arm64 digest below is the LOCAL dogfood build's (the draft
-# PR's evidence); the linux/windows digests land with the first tag
-# build of the v2.0.0 runtime release.
+# Registry template for the openjdk RUNTIME entry — rendered by the
+# publish job (sed tokens from the built shards/sidecars) and landed on
+# main by bot PR, replacing tools' `tebako publish --registry-out` flow
+# (the CLI refuses kind: runtime — runtimes publish through the runtime
+# release flow). kind: runtime entries carry NO entrypoints key (the
+# registry validator: only apps and toolkits declare entrypoints).
 payloads:
 - name: openjdk
   kind: runtime
@@ -16,14 +12,14 @@ payloads:
   - version: '21.0.12'
     platforms:
       aarch64-macos:
-        artifact: tebako-runtime-2.0.0-21.0.12-macos-arm64.tfs
-        sha256: '502d9d6e978eed68f3b0b390a63da5b83bd4f25ad007e77c76ed279952511f83'
+        artifact: tebako-runtime-2.1.0-21.0.12-macos-arm64.tfs
+        sha256: 'f548412d7ea3ca55ba92c401f7fb2c0c468341dade9ef9878dde0b9972a22882'
       x86_64-linux-gnu:
-        artifact: tebako-runtime-2.0.0-21.0.12-linux-gnu-x86_64.tfs
-        sha256: 'pending-first-tag-build'
+        artifact: tebako-runtime-2.1.0-21.0.12-linux-gnu-x86_64.tfs
+        sha256: 'b37c6f2964b198e1311a8f4ff79ab43c43416c15685f64a0b1ccc10bb32c9c71'
       x86_64-windows-ucrt:
-        artifact: tebako-runtime-2.0.0-21.0.12-windows-ucrt64.tfs
-        sha256: 'pending-first-tag-build'
+        artifact: tebako-runtime-2.1.0-21.0.12-windows-ucrt64.tfs
+        sha256: 'b04ab5c3f615006eb3dc915c30ff3e08607e59a168bf17037617e3e3a50fb32d'
     release:
-      ref: tfs:github:tebako-packages/openjdk:v2.0.0
+      ref: tfs:github:tebako-packages/openjdk:v2.1.0
   default: '21.0.12'
