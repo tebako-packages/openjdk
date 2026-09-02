@@ -69,15 +69,20 @@ runtime:
   # plain dlsym lands on the realpath@GLIBC_2.0 compat twin on
   # glibc ≤ 2.31, which EINVALs the NULL arm and broke jailed spawns
   # (exit 78) on the 0.16.19 factory floor.
-  wrapper_tebako: "2.1.4"
+  # v2.1.5 (2026-09-02, tebako#517): the NULL-arm reroute is
+  # glibc-scoped — musl has no canonicalize_file_name at all, so the
+  # v2.1.4 musl unit's constructor panicked on the RTLD_NEXT lookup
+  # (all 44 musl legs of the first 0.16.19 re-cut). musl keeps the
+  # plain-dlsym arm (no symbol versioning → no compat twin).
+  wrapper_tebako: "2.1.5"
   # The wrapper's trust anchor, per tool-platform (the launcher is the
   # shipped runtime pair's process entry point — an unauthenticated
-  # download would be a supply-chain hole). Digests are the v2.1.4
+  # download would be a supply-chain hole). Digests are the v2.1.5
   # release's per-asset .sha256 sidecars, fetched 2026-09-02.
   wrapper_sha256:
-    macos-arm64: "c3a6f950217444ada20782f7c20f5fd02060377b7c4157fb67236589fe0818d1"
-    linux-gnu-x86_64: "56d6a7a3e07a3f3cb1bcd306c0d41d2391e0909ea3299484c6ee186aa31fb617"
-    windows-ucrt64: "26330352ae260e815320a5c831b96d938c94e2035139fdc95d6320e6bf2e2db2"
+    macos-arm64: "ec2e7fe06e1ac3b5db472568d9e6470038d570d790dd0810fed3dd006aebc0a9"
+    linux-gnu-x86_64: "d93fbbf9a837cfed4ee46f8520c843d557214995904a4a936ebf09da979d9f04"
+    windows-ucrt64: "c76939db447596f5c4d06cee7520b73ba4353b95f63c1190eb5cbed73e1e6949"
 
 # Factory tools used by tools/build (the imager + the preload shim): the
 # tfs CLI and the link-unit tarball from the tamatebako/tebako release.
@@ -86,18 +91,18 @@ runtime:
 # tools/pins.rb reads this block into $GITHUB_ENV). The tfs pins are
 # cross-checked against the release's SHA256SUMS at fetch time; the
 # link-unit tarballs are NOT in that monolith, so these pins are their
-# single trust anchor (verified against the v2.1.4 downloads 2026-09-02).
+# single trust anchor (verified against the v2.1.5 downloads 2026-09-02).
 tools:
   repo: "tamatebako/tebako"
-  release: "v2.1.4"
+  release: "v2.1.5"
   sha256:
     tfs:
-      macos-arm64: "ee4353897a5af22ef4a5f7704768fd1bdc0647478f304533fca50d0873dba803"
-      linux-gnu-x86_64: "b411649399283ded0d5a8c883e38af1ce24615d9585bf38e448587b0e65401a2"
-      windows-ucrt64: "20d610c67b869a651691feca0e8fb57c9796e0c38fe14bffaa329bb86d2769fa"
+      macos-arm64: "20fe60ce2f02c6062aba5676d3aec60c13c625147493070ab190e7729966468a"
+      linux-gnu-x86_64: "431d76ae26641bca4e8bfb180aec29eb5de3f2c2a86f26acf75cc3c52b9fcfcd"
+      windows-ucrt64: "8b7dee79e96565a28df91dbaaa8cf42cffed5d19aa3d5318771edecbf9b86b35"
     link-unit:                       # POSIX legs only; the windows image omits preload_shim
-      macos-arm64: "03c6fa58200c463d9523741895a73c8ba02d6d9f0b780c1afb51508061da63e6"
-      linux-gnu-x86_64: "6d317506fbbe331d75e691b3c1ee0364291b8671608865474b4dce41ccc19133"
+      macos-arm64: "2ea10ff397c5922754c463be0976dedfa4ecc833f2fe38bc88221f60b6f6a140"
+      linux-gnu-x86_64: "f93ed95514e176fb3ab27f156be8dcca19a1d44f87625fcec197f1c3a8e430f9"
 
 image:
   format: dwarfs
