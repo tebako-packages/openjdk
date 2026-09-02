@@ -12,14 +12,14 @@ payloads:
   - version: '21.0.12'
     platforms:
       aarch64-macos:
-        artifact: tebako-runtime-2.1.4-21.0.12-macos-arm64.tfs
-        sha256: 'a9e16a51664dfaaac2c680a3d02b2c10602ac14001fb34dda4349d947ce6daf6'
+        artifact: tebako-runtime-2.1.5-21.0.12-macos-arm64.tfs
+        sha256: '6de9f55470329f62fcd7f5b0cf79550af64bb8dfb2d4aa53e99d95589aae3a80'
       x86_64-linux-gnu:
-        artifact: tebako-runtime-2.1.4-21.0.12-linux-gnu-x86_64.tfs
-        sha256: '46299cae7125ce24febdc246f7c180b3bcb7ac1b8e19bfd855944045535e6440'
+        artifact: tebako-runtime-2.1.5-21.0.12-linux-gnu-x86_64.tfs
+        sha256: '79be86dc37b130ef82b088b5e69fb685b6c89db5fe4a1019ce5cbd9432d02cff'
       x86_64-windows-ucrt:
-        artifact: tebako-runtime-2.1.4-21.0.12-windows-ucrt64.tfs
-        sha256: '9b1516af38ef1afdc06e8bf68e133c3141a22386237dd7388e312817ecf93c57'
+        artifact: tebako-runtime-2.1.5-21.0.12-windows-ucrt64.tfs
+        sha256: '59e3fefc85dd104618b2e588ee5bb4eed4cb6f9c1a09ccb0b380233781b72832'
     release:
-      ref: tfs:github:tebako-packages/openjdk:v2.1.4
+      ref: tfs:github:tebako-packages/openjdk:v2.1.5
   default: '21.0.12'
